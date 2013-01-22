@@ -67,4 +67,6 @@
 #  define grub_absolute_pointer(val) ((void *)(val))
 #endif
 
+#define UNUSED __attribute__((__unused__))
+
 #endif /* ! GRUB_COMPILER_HEADER */
