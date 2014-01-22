@@ -407,6 +407,9 @@ kernel = {
   extra_dist = kern/i386/realmode.S;
   extra_dist = boot/i386/pc/lzma_decode.S;
   extra_dist = kern/mips/cache_flush.S;
+
+  extra_dist = kern/s390x/dl.c;
+  extra_dist = lib/s390x/setjmp.S;
 };
 
 program = {
