@@ -1843,7 +1843,9 @@ module = {
 
 module = {
   name = linux;
-  x86 = loader/i386/linux.c;
+  i386_pc = loader/i386/linux.c;
+  i386_efi = loader/i386/efi/linux.c;
+  x86_64_efi = loader/i386/efi/linux.c;
   i386_xen_pvh = loader/i386/linux.c;
   xen = loader/i386/xen.c;
   i386_pc = lib/i386/pc/vesa_modes_table.c;
@@ -1859,8 +1861,6 @@ module = {
   loongarch64 = loader/efi/linux.c;
   riscv32 = loader/efi/linux.c;
   riscv64 = loader/efi/linux.c;
-  i386_efi = loader/efi/linux.c;
-  x86_64_efi = loader/efi/linux.c;
   emu = loader/emu/linux.c;
   common = loader/linux.c;
 };
@@ -1925,7 +1925,7 @@ module = {
 
 module = {
   name = linuxefi;
-  efi = loader/i386/efi/linux.c;
+  efi = lib/fake_module.c;
   enable = i386_efi;
   enable = x86_64_efi;
 };
