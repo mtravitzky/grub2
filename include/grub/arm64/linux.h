@@ -40,9 +40,17 @@ struct linux_arm64_kernel_header
   struct grub_pe_image_header pe_image_header;
 };
 
+struct grub_arm64_linux_pe_header
+{
+  grub_uint32_t magic;
+  struct grub_pe32_coff_header coff;
+  struct grub_pe64_optional_header opt;
+};
+
 #if defined(__aarch64__)
 # define GRUB_LINUX_ARMXX_MAGIC_SIGNATURE GRUB_LINUX_ARM64_MAGIC_SIGNATURE
 # define linux_arch_kernel_header linux_arm64_kernel_header
+# define grub_armxx_linux_pe_header grub_arm64_linux_pe_header
 #endif
 
 #endif /* ! GRUB_ARM64_LINUX_HEADER */
