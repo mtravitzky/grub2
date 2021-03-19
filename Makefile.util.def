@@ -681,6 +681,9 @@ program = {
   common = grub-core/osdep/journaled_fs.c;
   extra_dist = grub-core/osdep/basic/journaled_fs.c;
   extra_dist = grub-core/osdep/linux/journaled_fs.c;
+  common = grub-core/osdep/efi_removable_fallback.c;
+  extra_dist = grub-core/osdep/basic/efi_removable_fallback.c;
+  extra_dist = grub-core/osdep/linux/efi_removable_fallback.c;
 
   ldadd = '$(LIBLZMA)';
   ldadd = libgrubmods.a;
