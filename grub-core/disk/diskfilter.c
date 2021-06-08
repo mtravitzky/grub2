@@ -300,6 +300,8 @@ grub_diskfilter_memberlist (grub_disk_t disk)
   grub_disk_dev_t p;
   struct grub_diskfilter_vg *vg;
   struct grub_diskfilter_lv *lv2 = NULL;
+  struct grub_diskfilter_segment *seg;
+  unsigned int i, j;
 
   if (!lv->vg->pvs)
     return NULL;
@@ -331,25 +333,33 @@ grub_diskfilter_memberlist (grub_disk_t disk)
 	    }
     }
 
-  for (pv = lv->vg->pvs; pv; pv = pv->next)
-    {
-      if (!pv->disk)
+  for (i = 0, seg = lv->segments; i < lv->segment_count; i++, seg++)
+    for (j =0; j < seg->node_count; ++j)
+      if ((pv = seg->nodes[j].pv))
 	{
-	  /* TRANSLATORS: This message kicks in during the detection of
-	     which modules needs to be included in core image. This happens
-	     in the case of degraded RAID and means that autodetection may
-	     fail to include some of modules. It's an installation time
-	     message, not runtime message.  */
-	  grub_util_warn (_("Couldn't find physical volume `%s'."
-			    " Some modules may be missing from core image."),
-			  pv->name);
-	  continue;
+
+	  if (!pv->disk)
+	    {
+	      /* TRANSLATORS: This message kicks in during the detection of
+		 which modules needs to be included in core image. This happens
+		 in the case of degraded RAID and means that autodetection may
+		 fail to include some of modules. It's an installation time
+		 message, not runtime message.  */
+	      grub_util_warn (_("Couldn't find physical volume `%s'."
+				" Some modules may be missing from core image."),
+			      pv->name);
+	      continue;
+	    }
+
+	  for (tmp = list; tmp; tmp = tmp->next)
+	    if (grub_strcmp (tmp->disk->name, pv->disk->name) == 0)
+	      continue;
+
+	  tmp = grub_malloc (sizeof (*tmp));
+	  tmp->disk = pv->disk;
+	  tmp->next = list;
+	  list = tmp;
 	}
-      tmp = grub_malloc (sizeof (*tmp));
-      tmp->disk = pv->disk;
-      tmp->next = list;
-      list = tmp;
-    }
 
   return list;
 }
