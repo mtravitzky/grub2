@@ -213,6 +213,8 @@ void
 grub_diskfilter_get_partmap (grub_disk_t disk,
 			     void (*cb) (const char *val, void *data),
 			     void *data);
+int
+grub_diskfilter_get_raid_level (grub_disk_t disk);
 #endif
 
 #endif /* ! GRUB_RAID_H */

@@ -1320,6 +1320,25 @@ grub_diskfilter_get_pv_from_disk (grub_disk_t disk,
       }
   return NULL;
 }
+
+int
+grub_diskfilter_get_raid_level (grub_disk_t disk)
+{
+  /* disk might be NULL in the case of a LVM physical volume with no LVM
+     signature.  Ignore such cases here.  */
+  if (!disk)
+    return -1;
+
+  if (disk->dev->id != GRUB_DISK_DEVICE_DISKFILTER_ID)
+    return -1;
+
+  if (disk->name[0] != 'm' || disk->name[1] != 'd')
+    return -1;
+
+  if (!((struct grub_diskfilter_lv *) disk->data)->segments)
+    return -1;
+  return ((struct grub_diskfilter_lv *) disk->data)->segments->type;
+}
 #endif
 
 static struct grub_disk_dev grub_diskfilter_dev =
