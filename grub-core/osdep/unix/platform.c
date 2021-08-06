@@ -137,12 +137,11 @@ grub_install_register_efi (grub_device_t efidir_grub_dev,
 			   const char *efifile_path,
 			   const char *efi_distributor)
 {
-  const char * efidir_disk;
-  int efidir_part;
-  int ret;
+  int ret = 0;
+  int ndev = 0;
   int raid_level;
-  efidir_disk = grub_util_biosdisk_get_osdev (efidir_grub_dev->disk);
-  efidir_part = efidir_grub_dev->disk->partition ? efidir_grub_dev->disk->partition->number + 1 : 1;
+  int i;
+  grub_disk_t *disks;
 
   raid_level = grub_diskfilter_get_raid_level (efidir_grub_dev->disk);
   if (raid_level >= 0)
@@ -164,21 +163,52 @@ grub_install_register_efi (grub_device_t efidir_grub_dev,
   if (ret)
     return ret;
 
-  char *efidir_part_str = xasprintf ("%d", efidir_part);
+  ndev = 1;
+  disks = xcalloc (ndev, sizeof (*disks));
+  *disks = efidir_grub_dev->disk;
 
-  if (!verbosity)
-    ret = grub_util_exec ((const char * []){ "efibootmgr", "-q",
+  for (i = 0; i < ndev; i++)
+    {
+      const char * efidir_disk;
+      int efidir_part;
+      char *efidir_part_str;
+      char *new_efi_distributor = NULL;
+      grub_disk_t disk = disks[i];
+
+      efidir_disk = grub_util_biosdisk_get_osdev (disk);
+      if (!efidir_disk)
+	grub_util_error (_("%s: no device for efi"), disk->name);
+
+      efidir_part = disk->partition ? disk->partition->number + 1 : 1;
+      efidir_part_str = xasprintf ("%d", efidir_part);
+      if (ndev > 1)
+	{
+	  const char *p = grub_strrchr (efidir_disk, '/');
+	  new_efi_distributor = xasprintf ("%s (%s%d)\n",
+			efi_distributor,
+			p ? p + 1: efidir_disk,
+			efidir_part);
+	}
+
+      if (!verbosity)
+	ret = grub_util_exec ((const char * []){ "efibootmgr", "-q",
 	  "-c", "-d", efidir_disk,
 	  "-p", efidir_part_str, "-w",
-	  "-L", efi_distributor, "-l", 
+	  "-L", new_efi_distributor ? : efi_distributor, "-l",
 	  efifile_path, NULL });
-  else
-    ret = grub_util_exec ((const char * []){ "efibootmgr",
+      else
+	ret = grub_util_exec ((const char * []){ "efibootmgr",
 	  "-c", "-d", efidir_disk,
 	  "-p", efidir_part_str, "-w",
-	  "-L", efi_distributor, "-l", 
+	  "-L", new_efi_distributor ? : efi_distributor, "-l",
 	  efifile_path, NULL });
-  free (efidir_part_str);
+      free (efidir_part_str);
+      free (new_efi_distributor);
+      if (ret)
+	break;
+    }
+
+  free (disks);
   return ret;
 }
 
