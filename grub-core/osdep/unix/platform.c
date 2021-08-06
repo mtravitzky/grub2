@@ -142,10 +142,30 @@ grub_install_register_efi (grub_device_t efidir_grub_dev,
   int raid_level;
   int i;
   grub_disk_t *disks;
+  grub_disk_memberlist_t list = NULL, cur;
 
   raid_level = grub_diskfilter_get_raid_level (efidir_grub_dev->disk);
-  if (raid_level >= 0)
+  if (raid_level >= 0 && raid_level != 1)
     grub_util_error (_("unsupported raid level %d detected for efi system partition"), raid_level);
+  if (raid_level == 1)
+    {
+      const char *raidname = NULL;
+
+      if (efidir_grub_dev->disk->dev->disk_raidname)
+	raidname = efidir_grub_dev->disk->dev->disk_raidname (efidir_grub_dev->disk);
+      if (raidname
+	  && (grub_strncmp (raidname, "mdraid09", sizeof ("mdraid09")) == 0
+	      || (grub_strcmp (raidname, "mdraid1x") == 0
+		  && ((struct grub_diskfilter_lv *) efidir_grub_dev->disk->data)->vg->mdraid1x_minor_version == 0)))
+	{
+	  if (efidir_grub_dev->disk->dev->disk_memberlist)
+	    list = efidir_grub_dev->disk->dev->disk_memberlist (efidir_grub_dev->disk);
+	}
+      else
+	grub_util_error (_("this array has metadata at the start and may not be suitable as a efi system partition."
+	  " please ensure that your firmware understands md/v1.x metadata, or use --metadata=0.90"
+	  " to create the array."));
+    }
 
   if (grub_util_exec_redirect_null ((const char * []){ "efibootmgr", "--version", NULL }))
     {
@@ -163,9 +183,20 @@ grub_install_register_efi (grub_device_t efidir_grub_dev,
   if (ret)
     return ret;
 
-  ndev = 1;
-  disks = xcalloc (ndev, sizeof (*disks));
-  *disks = efidir_grub_dev->disk;
+  if (list)
+    {
+      for (cur = list; cur; cur = cur->next)
+	++ndev;
+      disks = xcalloc (ndev , sizeof (*disks));
+      for (cur = list, i = 0; i < ndev; cur = cur->next, i++)
+	disks[i] = cur->disk;
+    }
+  else
+    {
+      ndev = 1;
+      disks = xcalloc (ndev, sizeof (*disks));
+      *disks = efidir_grub_dev->disk;
+    }
 
   for (i = 0; i < ndev; i++)
     {
@@ -208,6 +239,12 @@ grub_install_register_efi (grub_device_t efidir_grub_dev,
 	break;
     }
 
+  while (list)
+    {
+      cur = list;
+      list = list->next;
+      free (cur);
+    }
   free (disks);
   return ret;
 }
