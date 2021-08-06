@@ -24,6 +24,7 @@
 #include <grub/misc.h>
 #include <grub/i18n.h>
 #include <grub/emu/exec.h>
+#include <grub/diskfilter.h>
 #include <sys/types.h>
 #include <dirent.h>
 #include <string.h>
@@ -139,8 +140,13 @@ grub_install_register_efi (grub_device_t efidir_grub_dev,
   const char * efidir_disk;
   int efidir_part;
   int ret;
+  int raid_level;
   efidir_disk = grub_util_biosdisk_get_osdev (efidir_grub_dev->disk);
   efidir_part = efidir_grub_dev->disk->partition ? efidir_grub_dev->disk->partition->number + 1 : 1;
+
+  raid_level = grub_diskfilter_get_raid_level (efidir_grub_dev->disk);
+  if (raid_level >= 0)
+    grub_util_error (_("unsupported raid level %d detected for efi system partition"), raid_level);
 
   if (grub_util_exec_redirect_null ((const char * []){ "efibootmgr", "--version", NULL }))
     {
