@@ -17,6 +17,7 @@
  *  along with GRUB.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef GRUB_MACHINE_PCBIOS
 /*
  * Tell zstd to expose functions that aren't part of the stable API, which
  * aren't safe to use when linking against a dynamic library. We vendor in a
@@ -24,6 +25,7 @@
  * functions to provide our own allocator, which uses grub_malloc(), to zstd.
  */
 #define ZSTD_STATIC_LINKING_ONLY
+#endif
 
 #include <grub/err.h>
 #include <grub/file.h>
@@ -35,7 +37,9 @@
 #include <grub/lib/crc.h>
 #include <grub/deflate.h>
 #include <minilzo.h>
+#ifndef GRUB_MACHINE_PCBIOS
 #include <zstd.h>
+#endif
 #include <grub/i18n.h>
 #include <grub/btrfs.h>
 #include <grub/crypto.h>
@@ -57,11 +61,19 @@ GRUB_MOD_LICENSE ("GPLv3+");
 #define GRUB_BTRFS_LZO_BLOCK_MAX_CSIZE (GRUB_BTRFS_LZO_BLOCK_SIZE + \
 				     (GRUB_BTRFS_LZO_BLOCK_SIZE / 16) + 64 + 3)
 
+#ifndef GRUB_MACHINE_PCBIOS
 #define ZSTD_BTRFS_MAX_WINDOWLOG 17
 #define ZSTD_BTRFS_MAX_INPUT     (1 << ZSTD_BTRFS_MAX_WINDOWLOG)
+#endif
 
 typedef grub_uint8_t grub_btrfs_checksum_t[0x20];
 typedef grub_uint16_t grub_btrfs_uuid_t[8];
+
+#ifdef GRUB_MACHINE_PCBIOS
+grub_ssize_t (*grub_btrfs_zstd_decompress) (char *ibuf,
+	grub_size_t isize, grub_off_t off,
+	char *obuf, grub_size_t osize) = NULL;
+#endif
 
 struct grub_btrfs_device
 {
@@ -1249,6 +1261,8 @@ grub_btrfs_read_inode (struct grub_btrfs_data *data,
   return grub_btrfs_read_logical (data, elemaddr, inode, sizeof (*inode), 0);
 }
 
+#ifndef GRUB_MACHINE_PCBIOS
+
 static void *grub_zstd_malloc (void *state __attribute__((unused)), size_t size)
 {
   return grub_malloc (size);
@@ -1338,6 +1352,8 @@ err:
 
   return ret;
 }
+
+#endif
 
 static grub_ssize_t
 grub_btrfs_lzo_decompress(char *ibuf, grub_size_t isize, grub_off_t off,
@@ -1548,6 +1564,10 @@ grub_btrfs_extent_read (struct grub_btrfs_data *data,
 	    }
 	  else if (data->extent->compression == GRUB_BTRFS_COMPRESSION_LZO)
 	    {
+#ifdef GRUB_MACHINE_PCBIOS
+	      if (!grub_btrfs_zstd_decompress)
+		return -1;
+#endif
 	      if (grub_btrfs_lzo_decompress(data->extent->inl, data->extsize -
 					   ((grub_uint8_t *) data->extent->inl
 					    - (grub_uint8_t *) data->extent),
@@ -1557,6 +1577,10 @@ grub_btrfs_extent_read (struct grub_btrfs_data *data,
 	    }
 	  else if (data->extent->compression == GRUB_BTRFS_COMPRESSION_ZSTD)
 	    {
+#ifdef GRUB_MACHINE_PCBIOS
+	      if (!grub_btrfs_zstd_decompress)
+		return -1;
+#endif
 	      if (grub_btrfs_zstd_decompress (data->extent->inl, data->extsize -
 					      ((grub_uint8_t *) data->extent->inl
 					       - (grub_uint8_t *) data->extent),
