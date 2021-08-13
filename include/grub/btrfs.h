@@ -70,7 +70,7 @@ struct grub_btrfs_inode_ref
 };
 
 #ifdef GRUB_MACHINE_PCBIOS
-extern grub_ssize_t (*EXPORT_VAR (grub_btrfs_zstd_decompress)) (char *ibuf,
+extern grub_ssize_t (*EXPORT_VAR (grub_btrfs_zstd_decompress_func)) (char *ibuf,
 		grub_size_t isize, grub_off_t off,
 		char *obuf, grub_size_t osize);
 #endif
