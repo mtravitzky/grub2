@@ -334,9 +334,10 @@ grub_diskfilter_memberlist (grub_disk_t disk)
     }
 
   for (i = 0, seg = lv->segments; i < lv->segment_count; i++, seg++)
-    for (j =0; j < seg->node_count; ++j)
-      if ((pv = seg->nodes[j].pv))
+    for (j = 0; j < seg->node_count; ++j)
+      if (seg->nodes[j].pv != NULL)
 	{
+	  pv = seg->nodes[j].pv;
 
 	  if (!pv->disk)
 	    {
@@ -351,17 +352,32 @@ grub_diskfilter_memberlist (grub_disk_t disk)
 	      continue;
 	    }
 
-	  for (tmp = list; tmp; tmp = tmp->next)
-	    if (grub_strcmp (tmp->disk->name, pv->disk->name) == 0)
-	      continue;
+	  for (tmp = list; tmp != NULL; tmp = tmp->next)
+	    if (!grub_strcmp (tmp->disk->name, pv->disk->name))
+	      break;
+	  if (tmp != NULL)
+	    continue;
 
 	  tmp = grub_malloc (sizeof (*tmp));
+	  if (!tmp)
+	    goto fail;
 	  tmp->disk = pv->disk;
 	  tmp->next = list;
 	  list = tmp;
 	}
 
   return list;
+
+fail:
+
+  while (list != NULL)
+    {
+      tmp = list;
+      list = list->next;
+      grub_free (tmp);
+    }
+
+  return NULL;
 }
 
 void
