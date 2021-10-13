@@ -376,7 +376,7 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
   grub_memset (params, 0, sizeof(*params));
 
   setup_header_end_offset = *((grub_uint8_t *)kernel + 0x201);
-  grub_dprintf ("linux", "copying %lu bytes from %p to %p\n",
+  grub_dprintf ("linux", "copying %" PRIuGRUB_SIZE " bytes from %p to %p\n",
 		MIN((grub_size_t)0x202+setup_header_end_offset,
 		    sizeof (*params)) - 0x1f1,
 		(grub_uint8_t *)kernel + 0x1f1,
