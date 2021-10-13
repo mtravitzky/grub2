@@ -100,8 +100,8 @@ kernel_alloc(grub_efi_uintn_t size, const char * const errmsg)
 	continue;
 
       pages = BYTES_TO_PAGES(size);
-      grub_dprintf ("linux", "Trying to allocate %lu pages from %p\n",
-		    pages, (void *)max);
+      grub_dprintf ("linux", "Trying to allocate %" PRIuGRUB_SIZE" pages from %p\n",
+		    pages, (void *)(grub_addr_t)max);
 
       prev_max = max;
       addr = grub_efi_allocate_pages_real (max, pages,
