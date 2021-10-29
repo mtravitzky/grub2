@@ -2483,6 +2483,35 @@ grub_btrfs_label (grub_device_t device, char **label)
 }
 
 #ifdef GRUB_UTIL
+
+struct embed_region {
+  unsigned int offset;
+  unsigned int len;
+};
+
+#define KB_TO_SECTOR(x) ((x) << 1)
+
+/*
+ * https://btrfs.wiki.kernel.org/index.php/Manpage/btrfs(5)#BOOTLOADER_SUPPORT
+ * The first 1MiB on each device is unused with the exception of primary
+ * superblock that is on the offset 64KiB and spans 4KiB.
+ */
+
+static const struct {
+  struct embed_region available;
+  struct embed_region used[6];
+} area = {
+  .available = {0, KB_TO_SECTOR(1024)}, /* The first 1MiB */
+  .used = {
+    {0, 1},                              /* boot.S */
+    {KB_TO_SECTOR(64) - 1, 1},           /* overflow guard */
+    {KB_TO_SECTOR(64), KB_TO_SECTOR(4)}, /* 4KiB superblock */
+    {KB_TO_SECTOR(68), 1},               /* overflow guard */
+    {KB_TO_SECTOR(1024) - 1, 1},         /* overflow guard */
+    {0, 0}                               /* array terminator */
+  }
+};
+
 static grub_err_t
 grub_btrfs_embed (grub_device_t device __attribute__ ((unused)),
 		  unsigned int *nsectors,
@@ -2490,25 +2519,50 @@ grub_btrfs_embed (grub_device_t device __attribute__ ((unused)),
 		  grub_embed_type_t embed_type,
 		  grub_disk_addr_t **sectors)
 {
-  unsigned i;
+  unsigned int i, j;
+  const struct embed_region *u;
+  grub_disk_addr_t *map;
+  unsigned int n = 0;
 
   if (embed_type != GRUB_EMBED_PCBIOS)
     return grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET,
 		       "BtrFS currently supports only PC-BIOS embedding");
 
-  if (64 * 2 - 1 < *nsectors)
-    return grub_error (GRUB_ERR_OUT_OF_RANGE,
-		       N_("your core.img is unusually large.  "
-			  "It won't fit in the embedding area"));
-
-  *nsectors = 64 * 2 - 1;
-  if (*nsectors > max_nsectors)
-    *nsectors = max_nsectors;
-  *sectors = grub_calloc (*nsectors, sizeof (**sectors));
-  if (!*sectors)
+  map = grub_calloc (area.available.len, sizeof (*map));
+  if (!map)
     return grub_errno;
-  for (i = 0; i < *nsectors; i++)
-    (*sectors)[i] = i + 1;
+
+  for (u = area.used; u->len; ++u)
+    {
+      unsigned int end = u->offset + u->len;
+
+      if (end > area.available.len)
+        end = area.available.len;
+      for (i = u->offset; i < end; ++i)
+        map[i] = 1;
+    }
+
+  for (i = 0; i < area.available.len; ++i)
+    if (map[i] == 0)
+      n++;
+
+  if (n < *nsectors)
+    {
+      grub_free (map);
+      return grub_error (GRUB_ERR_OUT_OF_RANGE,
+		         N_("your core.img is unusually large.  "
+			    "It won't fit in the embedding area"));
+    }
+
+  if (n > max_nsectors)
+    n = max_nsectors;
+
+  for (i = 0, j = 0; i < area.available.len && j < n; ++i)
+    if (map[i] == 0)
+      map[j++] = area.available.offset + i;
+
+  *nsectors = n;
+  *sectors = map;
 
   return GRUB_ERR_NONE;
 }
