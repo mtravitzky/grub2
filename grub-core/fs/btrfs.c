@@ -2485,11 +2485,9 @@ grub_btrfs_label (grub_device_t device, char **label)
 #ifdef GRUB_UTIL
 
 struct embed_region {
-  unsigned int offset;
-  unsigned int len;
+  unsigned int start;
+  unsigned int secs;
 };
-
-#define KB_TO_SECTOR(x) ((x) << 1)
 
 /*
  * https://btrfs.wiki.kernel.org/index.php/Manpage/btrfs(5)#BOOTLOADER_SUPPORT
@@ -2500,15 +2498,15 @@ struct embed_region {
 static const struct {
   struct embed_region available;
   struct embed_region used[6];
-} area = {
-  .available = {0, KB_TO_SECTOR(1024)}, /* The first 1MiB */
+} btrfs_head = {
+  .available = {0, GRUB_DISK_KiB_TO_SECTORS (1024)}, /* The first 1MiB */
   .used = {
-    {0, 1},                              /* boot.S */
-    {KB_TO_SECTOR(64) - 1, 1},           /* overflow guard */
-    {KB_TO_SECTOR(64), KB_TO_SECTOR(4)}, /* 4KiB superblock */
-    {KB_TO_SECTOR(68), 1},               /* overflow guard */
-    {KB_TO_SECTOR(1024) - 1, 1},         /* overflow guard */
-    {0, 0}                               /* array terminator */
+    {0, 1},                                                        /* boot.S */
+    {GRUB_DISK_KiB_TO_SECTORS (64) - 1, 1},                        /* overflow guard */
+    {GRUB_DISK_KiB_TO_SECTORS (64), GRUB_DISK_KiB_TO_SECTORS (4)}, /* 4KiB superblock */
+    {GRUB_DISK_KiB_TO_SECTORS (68), 1},                            /* overflow guard */
+    {GRUB_DISK_KiB_TO_SECTORS (1024) - 1, 1},                      /* overflow guard */
+    {0, 0}                                                         /* array terminator */
   }
 };
 
@@ -2528,21 +2526,28 @@ grub_btrfs_embed (grub_device_t device __attribute__ ((unused)),
     return grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET,
 		       "BtrFS currently supports only PC-BIOS embedding");
 
-  map = grub_calloc (area.available.len, sizeof (*map));
-  if (!map)
+  map = grub_calloc (btrfs_head.available.secs, sizeof (*map));
+  if (map == NULL)
     return grub_errno;
 
-  for (u = area.used; u->len; ++u)
+  /*
+   * Populating the map array so that it can be used to index if a disk
+   * address is available to embed
+   * 0: available
+   * 1: unavailable
+   */
+  for (u = btrfs_head.used; u->secs; ++u)
     {
-      unsigned int end = u->offset + u->len;
+      unsigned int end = u->start + u->secs;
 
-      if (end > area.available.len)
-        end = area.available.len;
-      for (i = u->offset; i < end; ++i)
+      if (end > btrfs_head.available.secs)
+        end = btrfs_head.available.secs;
+      for (i = u->start; i < end; ++i)
         map[i] = 1;
     }
 
-  for (i = 0; i < area.available.len; ++i)
+  /* Adding up n until it matches total size of available embedding area */
+  for (i = 0; i < btrfs_head.available.secs; ++i)
     if (map[i] == 0)
       n++;
 
@@ -2557,9 +2562,15 @@ grub_btrfs_embed (grub_device_t device __attribute__ ((unused)),
   if (n > max_nsectors)
     n = max_nsectors;
 
-  for (i = 0, j = 0; i < area.available.len && j < n; ++i)
+  /*
+   * Populating the array so that it can used to index disk block address for
+   * an image file's offset to be embedded on disk. The unit is in sectors.
+   * i: The disk block address relative to btrfs_head.available.start
+   * j: The offset in image file
+   */
+  for (i = 0, j = 0; i < btrfs_head.available.secs && j < n; ++i)
     if (map[i] == 0)
-      map[j++] = area.available.offset + i;
+      map[j++] = btrfs_head.available.start + i;
 
   *nsectors = n;
   *sectors = map;
