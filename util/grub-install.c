@@ -43,6 +43,7 @@
 #include <grub/util/ofpath.h>
 #include <grub/hfsplus.h>
 #include <grub/time.h>
+#include <grub/lib/envblk.h>
 
 #include <string.h>
 
@@ -766,6 +767,12 @@ write_to_disk (grub_device_t dev, const char *fn)
   return err;
 }
 
+static void
+write_to_part_end (grub_device_t dev, grub_envblk_t envblk)
+{
+  grub_disk_part_end (dev->disk, envblk->size, envblk->buf);
+}
+
 static int
 is_prep_partition (grub_device_t dev)
 {
@@ -1341,10 +1348,10 @@ main (int argc, char *argv[])
 	  zipldir = d;
 	}
     }
-
+#if 0
   grub_install_copy_files (grub_install_source_directory,
 			   grubdir, platform);
-
+#endif
   char *envfile = grub_util_path_concat (2, grubdir, "grubenv");
   if (!grub_util_is_regular (envfile))
     grub_util_create_envblk_file (envfile);
@@ -1481,6 +1488,38 @@ main (int argc, char *argv[])
 			     install_device);
 	}
     }
+
+  {
+    if (install_drive)
+      {
+	grub_device_t ins_dev;
+	char *uuid = NULL;
+	grub_envblk_t envblk = NULL;
+
+	if (grub_fs->fs_uuid && grub_fs->fs_uuid (grub_dev, &uuid))
+	  {
+	    grub_print_error ();
+	    grub_errno = 0;
+	    uuid = NULL;
+	  }
+
+	if (uuid)
+	  {
+	    char *buf = grub_envblk_buf (512);
+	    envblk = grub_envblk_open (buf, 512);
+	    grub_envblk_set (envblk, "GRUBFS_UUID", uuid);
+	  }
+
+	ins_dev = grub_device_open (install_drive);
+	if (!ins_dev)
+	  grub_util_error ("%s", _("Not a grub device"));
+	if (envblk)
+	  write_to_part_end (ins_dev, envblk);
+      }
+
+    fprintf (stderr, "Finish Test ...\n");
+    return 0;
+  }
 
   if (install_drive
       && platform == GRUB_INSTALL_PLATFORM_I386_PC
