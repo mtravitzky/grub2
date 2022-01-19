@@ -1492,9 +1492,15 @@ main (int argc, char *argv[])
   {
     if (install_drive)
       {
-	grub_device_t ins_dev;
 	char *uuid = NULL;
+	const char *cryptouuid = NULL;
 	grub_envblk_t envblk = NULL;
+	grub_device_t ins_dev;
+	char *buf;
+
+	/* TODO: Add LVM/RAID on encrypted partitions */
+	if (grub_dev->disk && grub_dev->disk->dev->id == GRUB_DISK_DEVICE_CRYPTODISK_ID)
+	  cryptouuid = grub_util_cryptodisk_get_uuid (grub_dev->disk);
 
 	if (grub_fs->fs_uuid && grub_fs->fs_uuid (grub_dev, &uuid))
 	  {
@@ -1503,12 +1509,13 @@ main (int argc, char *argv[])
 	    uuid = NULL;
 	  }
 
+	buf = grub_envblk_buf (512);
+	envblk = grub_envblk_open (buf, 512);
+
 	if (uuid)
-	  {
-	    char *buf = grub_envblk_buf (512);
-	    envblk = grub_envblk_open (buf, 512);
-	    grub_envblk_set (envblk, "GRUBFS_UUID", uuid);
-	  }
+	  grub_envblk_set (envblk, "ROOTDEV_FS_UUID", uuid);
+	if (cryptouuid)
+	  grub_envblk_set (envblk, "ROOTDEV_CRYPTO_UUID", cryptouuid);
 
 	ins_dev = grub_device_open (install_drive);
 	if (!ins_dev)
