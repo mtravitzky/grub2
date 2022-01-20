@@ -28,7 +28,6 @@
 #include <grub/extcmd.h>
 #include <grub/i18n.h>
 #include <grub/gpt_partition.h>
-#include <grub/lib/hexdump.h>
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
@@ -538,7 +537,6 @@ prep_read_envblk (const char *devname)
   if (grub_disk_read (dev->disk, dev->disk->partition->len - 1, 0, 512, buf))
     goto fail;
 
-  hexdump (0, buf, 512);
   envblk = grub_envblk_open (buf, 512);
   if (!envblk)
     {
