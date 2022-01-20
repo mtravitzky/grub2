@@ -1348,10 +1348,8 @@ main (int argc, char *argv[])
 	  zipldir = d;
 	}
     }
-#if 0
   grub_install_copy_files (grub_install_source_directory,
 			   grubdir, platform);
-#endif
   char *envfile = grub_util_path_concat (2, grubdir, "grubenv");
   if (!grub_util_is_regular (envfile))
     grub_util_create_envblk_file (envfile);
@@ -1488,45 +1486,6 @@ main (int argc, char *argv[])
 			     install_device);
 	}
     }
-
-  {
-    if (install_drive)
-      {
-	char *uuid = NULL;
-	const char *cryptouuid = NULL;
-	grub_envblk_t envblk = NULL;
-	grub_device_t ins_dev;
-	char *buf;
-
-	/* TODO: Add LVM/RAID on encrypted partitions */
-	if (grub_dev->disk && grub_dev->disk->dev->id == GRUB_DISK_DEVICE_CRYPTODISK_ID)
-	  cryptouuid = grub_util_cryptodisk_get_uuid (grub_dev->disk);
-
-	if (grub_fs->fs_uuid && grub_fs->fs_uuid (grub_dev, &uuid))
-	  {
-	    grub_print_error ();
-	    grub_errno = 0;
-	    uuid = NULL;
-	  }
-
-	buf = grub_envblk_buf (512);
-	envblk = grub_envblk_open (buf, 512);
-
-	if (uuid)
-	  grub_envblk_set (envblk, "ROOTDEV_FS_UUID", uuid);
-	if (cryptouuid)
-	  grub_envblk_set (envblk, "ROOTDEV_CRYPTO_UUID", cryptouuid);
-
-	ins_dev = grub_device_open (install_drive);
-	if (!ins_dev)
-	  grub_util_error ("%s", _("Not a grub device"));
-	if (envblk)
-	  write_to_part_end (ins_dev, envblk);
-      }
-
-    fprintf (stderr, "Finish Test ...\n");
-    return 0;
-  }
 
   if (install_drive
       && platform == GRUB_INSTALL_PLATFORM_I386_PC
@@ -2157,6 +2116,41 @@ main (int argc, char *argv[])
 	  if (write_to_disk (ins_dev, imgfile))
 	    {
 	      grub_util_error ("%s", _("failed to copy Grub to the PReP partition"));
+	    }
+
+	  if ((signed_grub_mode >= SIGNED_GRUB_FORCE) || ((signed_grub_mode == SIGNED_GRUB_AUTO) && (ppc_sb_state > 0)))
+	    {
+	      char *uuid = NULL;
+	      const char *cryptouuid = NULL;
+	      grub_envblk_t envblk = NULL;
+	      char *buf;
+
+	      /* TODO: Add LVM/RAID on encrypted partitions */
+	      if (grub_dev->disk && grub_dev->disk->dev->id == GRUB_DISK_DEVICE_CRYPTODISK_ID)
+		cryptouuid = grub_util_cryptodisk_get_uuid (grub_dev->disk);
+	      if (grub_fs->fs_uuid && grub_fs->fs_uuid (grub_dev, &uuid))
+		{
+		  grub_print_error ();
+		  grub_errno = 0;
+		  uuid = NULL;
+		}
+	      buf = grub_envblk_buf (512);
+	      envblk = grub_envblk_open (buf, 512);
+	      if (uuid)
+		grub_envblk_set (envblk, "ENV_FS_UUID", uuid);
+	      if (cryptouuid)
+		grub_envblk_set (envblk, "ENV_CRYPTO_UUID", cryptouuid);
+	      if (relative_grubdir)
+		grub_envblk_set (envblk, "ENV_GRUB_DIR", relative_grubdir);
+	      if (have_abstractions)
+		grub_envblk_set (envblk, "ENV_HINT", grub_dev->disk->name);
+	      if (envblk)
+		{
+		  fprintf (stderr, _("Write environment block to PReP.\n"));
+		  /* FIXME: What if write_to_part_end() fails ? */
+		  write_to_part_end (ins_dev, envblk);
+		}
+	      grub_envblk_close (envblk);
 	    }
 	  grub_device_close (ins_dev);
 	  if (update_nvram)
