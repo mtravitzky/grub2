@@ -2134,8 +2134,8 @@ main (int argc, char *argv[])
 		  grub_errno = 0;
 		  uuid = NULL;
 		}
-	      buf = grub_envblk_buf (512);
-	      envblk = grub_envblk_open (buf, 512);
+	      buf = grub_envblk_buf (GRUB_ENVBLK_PREP_SIZE);
+	      envblk = grub_envblk_open (buf, GRUB_ENVBLK_PREP_SIZE);
 	      if (uuid)
 		grub_envblk_set (envblk, "ENV_FS_UUID", uuid);
 	      if (cryptouuid)

@@ -529,15 +529,15 @@ prep_read_envblk (const char *devname)
       goto fail;
     }
 
-  buf = grub_malloc (512);
+  buf = grub_malloc (GRUB_ENVBLK_PREP_SIZE);
   if (!buf)
     goto fail;
 
   /*FIXME: check underflow */
-  if (grub_disk_read (dev->disk, dev->disk->partition->len - 1, 0, 512, buf))
+  if (grub_disk_read (dev->disk, dev->disk->partition->len - (GRUB_ENVBLK_PREP_SIZE >> GRUB_DISK_SECTOR_BITS), 0, GRUB_ENVBLK_PREP_SIZE, buf))
     goto fail;
 
-  envblk = grub_envblk_open (buf, 512);
+  envblk = grub_envblk_open (buf, GRUB_ENVBLK_PREP_SIZE);
   if (!envblk)
     {
       grub_error (GRUB_ERR_BAD_FILE_TYPE, "invalid environment block");
