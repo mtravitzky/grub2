@@ -27,7 +27,6 @@
 #include <grub/lib/envblk.h>
 #include <grub/extcmd.h>
 #include <grub/i18n.h>
-#include <grub/gpt_partition.h>
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
@@ -443,6 +442,10 @@ grub_cmd_save_env (grub_extcmd_context_t ctxt, int argc, char **args)
   return grub_errno;
 }
 
+#if defined(__powerpc__) && defined(GRUB_MACHINE_IEEE1275)
+
+#include <grub/gpt_partition.h>
+
 static int
 is_prep_partition (grub_device_t dev)
 {
@@ -587,9 +590,12 @@ grub_cmd_prep_loadenv (grub_command_t cmd __attribute__ ((unused)),
 
   return grub_errno;
 }
+#endif
 
 static grub_extcmd_t cmd_load, cmd_list, cmd_save;
+#if defined(__powerpc__) && defined(GRUB_MACHINE_IEEE1275)
 static grub_command_t cmd_prep_load;
+#endif
 
 GRUB_MOD_INIT(loadenv)
 {
@@ -607,10 +613,12 @@ GRUB_MOD_INIT(loadenv)
 			  N_("[-f FILE] variable_name [...]"),
 			  N_("Save variables to environment block file."),
 			  options);
+#if defined(__powerpc__) && defined(GRUB_MACHINE_IEEE1275)
   cmd_prep_load =
     grub_register_command("prep_load_env", grub_cmd_prep_loadenv,
 			  "DEVICE",
 			  N_("Load variables from environment block file."));
+#endif
 }
 
 GRUB_MOD_FINI(loadenv)
@@ -618,5 +626,7 @@ GRUB_MOD_FINI(loadenv)
   grub_unregister_extcmd (cmd_load);
   grub_unregister_extcmd (cmd_list);
   grub_unregister_extcmd (cmd_save);
+#if defined(__powerpc__) && defined(GRUB_MACHINE_IEEE1275)
   grub_unregister_command (cmd_prep_load);
+#endif
 }
