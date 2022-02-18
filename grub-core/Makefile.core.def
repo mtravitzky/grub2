@@ -2684,4 +2684,6 @@ module = {
   name = prep_loadenv;
   common = commands/prep_loadenv.c;
   enable = powerpc_ieee1275;
+  cflags = '$(CFLAGS_POSIX) $(CFLAGS_GNULIB)';
+  cppflags = '$(CPPFLAGS_POSIX) $(CPPFLAGS_GNULIB)';
 };
