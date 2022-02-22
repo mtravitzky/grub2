@@ -1693,6 +1693,40 @@ main (int argc, char *argv[])
 	    }
 	}
       prefix_drive = xasprintf ("(%s)", grub_drives[0]);
+
+      if (platform == GRUB_INSTALL_PLATFORM_X86_64_EFI
+	  && grub_dev->disk
+	  && grub_dev->disk->partition
+	  && grub_fs->fs_uuid)
+	{
+	  int raid_level;
+	  char *uuid = NULL;
+	  char *escaped_relpath = NULL;
+
+	  raid_level = probe_raid_level (grub_dev->disk);
+	  if (raid_level != 1)
+	    goto out;
+
+	  escaped_relpath = escape (relative_grubdir);
+	  if (!escaped_relpath)
+	    goto out;
+
+	  if (grub_fs->fs_uuid (grub_dev, &uuid) || !uuid)
+	    {
+	      grub_print_error ();
+	      grub_errno = 0;
+	      goto out;
+	    }
+
+	  if (!load_cfg_f)
+	    load_cfg_f = grub_util_fopen (load_cfg, "wb");
+	  have_load_cfg = 1;
+	  fprintf (load_cfg_f, "search --no-floppy --fs-uuid --set=root --hint='%s' %s\n", grub_drives[0], uuid);
+	  fprintf (load_cfg_f, "set prefix=($root)'%s'\n", escaped_relpath);
+	  grub_install_push_module ("search");
+ out:
+	  grub_free (escaped_relpath);
+	}
     }
 
 #ifdef __linux__
