@@ -1021,6 +1021,7 @@ grub_cryptodisk_scan_device_real (const char *name,
     if (!dev)
       continue;
     crd = cr;
+    break;
   }
 
   if (!dev)
