@@ -2313,7 +2313,7 @@ struct embed_region {
 
 static const struct {
   struct embed_region available;
-  struct embed_region used[6];
+  struct embed_region used[7];
 } btrfs_head = {
   .available = {0, GRUB_DISK_KiB_TO_SECTORS (1024)}, /* The first 1 MiB. */
   .used = {
@@ -2321,6 +2321,7 @@ static const struct {
     {GRUB_DISK_KiB_TO_SECTORS (64) - 1, 1},                        /* Overflow guard. */
     {GRUB_DISK_KiB_TO_SECTORS (64), GRUB_DISK_KiB_TO_SECTORS (4)}, /* 4 KiB superblock. */
     {GRUB_DISK_KiB_TO_SECTORS (68), 1},                            /* Overflow guard. */
+    {GRUB_DISK_KiB_TO_SECTORS (ENV_BTRFS_OFFSET) - 1, 3},          /* Environment Block. */
     {GRUB_DISK_KiB_TO_SECTORS (1024) - 1, 1},                      /* Overflow guard. */
     {0, 0}                                                         /* Array terminator. */
   }
