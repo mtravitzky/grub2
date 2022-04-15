@@ -128,7 +128,7 @@ struct fs_envblk_spec {
   int offset;
   int size;
 } fs_envblk_spec[] = {
-  { "btrfs", 256 * 1024, GRUB_DISK_SECTOR_SIZE },
+  { "btrfs", ENV_BTRFS_OFFSET * 1024, GRUB_DISK_SECTOR_SIZE },
   { NULL, 0, 0 }
 };
 
