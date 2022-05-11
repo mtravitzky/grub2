@@ -491,10 +491,11 @@ grub_ofdisk_iterate (grub_disk_dev_iterate_hook_t hook, void *hook_data,
 {
   unsigned i;
 
-  if (pull != GRUB_DISK_PULL_NONE)
+  if (pull > GRUB_DISK_PULL_REMOVABLE)
     return 0;
 
-  scan ();
+  if (pull == GRUB_DISK_PULL_REMOVABLE)
+    scan ();
 
   for (i = 0; i < ARRAY_SIZE (ofdisk_hash); i++)
     {
@@ -530,6 +531,12 @@ grub_ofdisk_iterate (grub_disk_dev_iterate_hook_t hook, void *hook_data,
 	    }
 
 	  if (!ent->is_boot && ent->is_removable)
+	    continue;
+
+	  if (pull == GRUB_DISK_PULL_NONE && !ent->is_boot)
+	    continue;
+
+	  if (pull == GRUB_DISK_PULL_REMOVABLE && ent->is_boot)
 	    continue;
 
 	  if (hook (ent->grub_shortest, hook_data))
