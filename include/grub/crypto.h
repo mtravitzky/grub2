@@ -256,7 +256,14 @@ struct grub_crypto_cipher_handle
 
 typedef struct grub_crypto_cipher_handle *grub_crypto_cipher_handle_t;
 
-struct grub_crypto_hmac_handle;
+struct grub_crypto_hmac_handle
+{
+  const struct gcry_md_spec *md;
+  void *ctx;
+  void *ctx2;
+  void *opad;
+  void *ipad;
+};
 
 const gcry_cipher_spec_t *
 grub_crypto_lookup_cipher_by_name (const char *name);
@@ -365,6 +372,18 @@ gcry_err_code_t
 grub_crypto_hmac_buffer (const struct gcry_md_spec *md,
 			 const void *key, grub_size_t keylen,
 			 const void *data, grub_size_t datalen, void *out);
+
+struct grub_crypto_hmac_handle *
+grub_crypto_hmac_XXX_init (const struct gcry_md_spec *md,
+		           const void *key, grub_size_t keylen);
+
+gcry_err_code_t
+grub_crypto_hmac_XXX_write (struct grub_crypto_hmac_handle *hnd,
+			    const void *data,
+			    grub_size_t datalen,
+			    void *out);
+void
+grub_crypto_hmac_XXX_fini (struct grub_crypto_hmac_handle *hnd);
 
 extern gcry_md_spec_t _gcry_digest_spec_md5;
 extern gcry_md_spec_t _gcry_digest_spec_sha1;

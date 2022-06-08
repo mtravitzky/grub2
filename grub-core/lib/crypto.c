@@ -27,13 +27,6 @@
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
-struct grub_crypto_hmac_handle
-{
-  const struct gcry_md_spec *md;
-  void *ctx;
-  void *opad;
-};
-
 static gcry_cipher_spec_t *grub_ciphers = NULL;
 static gcry_md_spec_t *grub_digests = NULL;
 
@@ -318,7 +311,7 @@ grub_crypto_hmac_init (const struct gcry_md_spec *md,
   if (!ctx)
     goto err;
 
-  if ( keylen > md->blocksize ) 
+  if ( keylen > md->blocksize )
     {
       helpkey = grub_malloc (md->mdlen);
       if (!helpkey)
@@ -339,7 +332,7 @@ grub_crypto_hmac_init (const struct gcry_md_spec *md,
 
   grub_memcpy ( ipad, key, keylen );
   grub_memcpy ( opad, key, keylen );
-  for (i=0; i < md->blocksize; i++ ) 
+  for (i=0; i < md->blocksize; i++ )
     {
       ipad[i] ^= 0x36;
       opad[i] ^= 0x5c;
@@ -411,6 +404,113 @@ grub_crypto_hmac_fini (struct grub_crypto_hmac_handle *hnd, void *out)
   grub_free (hnd);
 
   return GPG_ERR_NO_ERROR;
+}
+
+struct grub_crypto_hmac_handle *
+grub_crypto_hmac_XXX_init (const struct gcry_md_spec *md,
+		           const void *key, grub_size_t keylen)
+{
+  grub_uint8_t *helpkey = NULL;
+  grub_uint8_t *ipad = NULL, *opad = NULL;
+  void *ctx = NULL, *ctx2 = NULL;
+  struct grub_crypto_hmac_handle *ret = NULL;
+  unsigned i;
+
+  if (md->mdlen > md->blocksize)
+    return NULL;
+
+  ctx = grub_malloc (md->contextsize);
+  if (!ctx)
+    goto err;
+
+  ctx2 = grub_malloc (md->contextsize);
+  if (!ctx2)
+    goto err;
+
+  if ( keylen > md->blocksize )
+    {
+      helpkey = grub_malloc (md->mdlen);
+      if (!helpkey)
+	goto err;
+      grub_crypto_hash (md, helpkey, key, keylen);
+
+      key = helpkey;
+      keylen = md->mdlen;
+    }
+
+  ipad = grub_zalloc (md->blocksize);
+  if (!ipad)
+    goto err;
+
+  opad = grub_zalloc (md->blocksize);
+  if (!opad)
+    goto err;
+
+  grub_memcpy ( ipad, key, keylen );
+  grub_memcpy ( opad, key, keylen );
+  for (i=0; i < md->blocksize; i++ )
+    {
+      ipad[i] ^= 0x36;
+      opad[i] ^= 0x5c;
+    }
+  grub_free (helpkey);
+  helpkey = NULL;
+
+  ret = grub_malloc (sizeof (*ret));
+  if (!ret)
+    goto err;
+
+  ret->md = md;
+  ret->ctx = ctx;
+  ret->ctx2 = ctx2;
+  ret->opad = opad;
+  ret->ipad = ipad;
+
+  return ret;
+
+ err:
+  grub_free (helpkey);
+  grub_free (ctx);
+  grub_free (ctx2);
+  grub_free (ipad);
+  grub_free (opad);
+  return NULL;
+}
+
+gcry_err_code_t
+grub_crypto_hmac_XXX_write (struct grub_crypto_hmac_handle *hnd,
+			    const void *data,
+			    grub_size_t datalen,
+			    void *out)
+{
+  hnd->md->init (hnd->ctx);
+  hnd->md->write (hnd->ctx, hnd->ipad, hnd->md->blocksize); /* inner pad */
+  hnd->md->write (hnd->ctx, data, datalen);
+  hnd->md->final (hnd->ctx);
+
+  hnd->md->init (hnd->ctx2);
+  hnd->md->write (hnd->ctx2, hnd->opad, hnd->md->blocksize);
+  hnd->md->write (hnd->ctx2, hnd->md->read (hnd->ctx), hnd->md->mdlen);
+  hnd->md->final (hnd->ctx2);
+
+  grub_memcpy (out, hnd->md->read (hnd->ctx2), hnd->md->mdlen);
+
+  return GPG_ERR_NO_ERROR;
+}
+
+void
+grub_crypto_hmac_XXX_fini (struct grub_crypto_hmac_handle *hnd)
+{
+  grub_memset (hnd->opad, 0, hnd->md->blocksize);
+  grub_free (hnd->opad);
+  grub_memset (hnd->ipad, 0, hnd->md->blocksize);
+  grub_free (hnd->ipad);
+  grub_memset (hnd->ctx, 0, hnd->md->contextsize);
+  grub_free (hnd->ctx);
+  grub_memset (hnd->ctx2, 0, hnd->md->contextsize);
+  grub_free (hnd->ctx2);
+  grub_memset (hnd, 0, sizeof (*hnd));
+  grub_free (hnd);
 }
 
 gcry_err_code_t
