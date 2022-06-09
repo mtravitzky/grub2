@@ -5,6 +5,7 @@
 #include <grub/file.h>
 #include <grub/mm.h>
 #include <grub/safemath.h>
+#include <grub/list.h>
 
 struct newc_head
 {
@@ -27,6 +28,7 @@ struct newc_head
 struct grub_linux_initrd_component
 {
   grub_file_t file;
+  char *buf;
   char *newc_name;
   grub_off_t size;
 };
@@ -37,6 +39,18 @@ struct dir
   struct dir *next;
   struct dir *child;
 };
+
+struct grub_key_publisher
+{
+  struct grub_key_publisher *next;
+  struct grub_key_publisher **prev;
+  char *name; /* UUID */
+  char *path;
+  char *key;
+  grub_size_t key_len;
+};
+
+static struct grub_key_publisher *kpuber;
 
 static char
 hex (grub_uint8_t val)
@@ -149,6 +163,65 @@ insert_dir (const char *name, struct dir **root,
   return GRUB_ERR_NONE;
 }
 
+static grub_err_t
+grub_initrd_component (const char *buf, int bufsz, const char *newc_name,
+		  struct grub_linux_initrd_context *initrd_ctx)
+{
+  struct dir *root = 0;
+  struct grub_linux_initrd_component *comp = initrd_ctx->components + initrd_ctx->nfiles;
+  grub_size_t dir_size, name_len;
+
+  while (*newc_name == '/')
+    newc_name++;
+
+  initrd_ctx->size = ALIGN_UP (initrd_ctx->size, 4);
+  comp->newc_name = grub_strdup (newc_name);
+  if (!comp->newc_name ||
+      insert_dir (comp->newc_name, &root, 0, &dir_size))
+    {
+      /* FIXME: Check NULL file pointer before close */
+      grub_initrd_close (initrd_ctx);
+      return grub_errno;
+    }
+  /* Should name_len count terminating null ? */
+  name_len = grub_strlen (comp->newc_name) + 1;
+  if (grub_add (initrd_ctx->size,
+		ALIGN_UP (sizeof (struct newc_head) + name_len, 4),
+		&initrd_ctx->size) ||
+      grub_add (initrd_ctx->size, dir_size, &initrd_ctx->size))
+    goto overflow;
+
+  comp->buf = grub_malloc (bufsz);
+  if (!comp->buf)
+    {
+      free_dir (root);
+      grub_initrd_close (initrd_ctx);
+      return grub_errno;
+    }
+  grub_memcpy (comp->buf, buf, bufsz);
+  initrd_ctx->nfiles++;
+  comp->size = bufsz;
+  if (grub_add (initrd_ctx->size, comp->size,
+		&initrd_ctx->size))
+    goto overflow;
+
+  initrd_ctx->size = ALIGN_UP (initrd_ctx->size, 4);
+  if (grub_add (initrd_ctx->size,
+		ALIGN_UP (sizeof (struct newc_head)
+			  + sizeof ("TRAILER!!!") - 1, 4),
+		&initrd_ctx->size))
+    goto overflow;
+
+  free_dir (root);
+  root = 0;
+  return GRUB_ERR_NONE;
+
+ overflow:
+  free_dir (root);
+  grub_initrd_close (initrd_ctx);
+  return grub_error (GRUB_ERR_OUT_OF_RANGE, N_("overflow is detected"));
+}
+
 grub_err_t
 grub_initrd_init (int argc, char *argv[],
 		  struct grub_linux_initrd_context *initrd_ctx)
@@ -156,11 +229,17 @@ grub_initrd_init (int argc, char *argv[],
   int i;
   int newc = 0;
   struct dir *root = 0;
+  struct grub_key_publisher *pk;
+  int numkey = 0;
 
   initrd_ctx->nfiles = 0;
   initrd_ctx->components = 0;
 
-  initrd_ctx->components = grub_calloc (argc, sizeof (initrd_ctx->components[0]));
+  FOR_LIST_ELEMENTS (pk, kpuber)
+    if (pk->key && pk->path)
+      numkey++;
+
+  initrd_ctx->components = grub_calloc (argc + numkey, sizeof (initrd_ctx->components[0]));
   if (!initrd_ctx->components)
     return grub_errno;
 
@@ -240,6 +319,10 @@ grub_initrd_init (int argc, char *argv[],
       root = 0;
     }
 
+  FOR_LIST_ELEMENTS (pk, kpuber)
+    if (pk->key && pk->path)
+      grub_initrd_component (pk->key, pk->key_len, pk->path, initrd_ctx);
+
   return GRUB_ERR_NONE;
 
  overflow:
@@ -263,7 +346,9 @@ grub_initrd_close (struct grub_linux_initrd_context *initrd_ctx)
   for (i = 0; i < initrd_ctx->nfiles; i++)
     {
       grub_free (initrd_ctx->components[i].newc_name);
-      grub_file_close (initrd_ctx->components[i].file);
+      if (initrd_ctx->components[i].file)
+	grub_file_close (initrd_ctx->components[i].file);
+      grub_free (initrd_ctx->components[i].buf);
     }
   grub_free (initrd_ctx->components);
   initrd_ctx->components = 0;
@@ -297,7 +382,7 @@ grub_initrd_load (struct grub_linux_initrd_context *initrd_ctx,
 	    }
 	  ptr += dir_size;
 	  ptr = make_header (ptr, initrd_ctx->components[i].newc_name,
-			     grub_strlen (initrd_ctx->components[i].newc_name),
+			     grub_strlen (initrd_ctx->components[i].newc_name) + 1,
 			     0100777,
 			     initrd_ctx->components[i].size);
 	  newc = 1;
@@ -312,7 +397,12 @@ grub_initrd_load (struct grub_linux_initrd_context *initrd_ctx,
 	}
 
       cursize = initrd_ctx->components[i].size;
-      if (grub_file_read (initrd_ctx->components[i].file, ptr, cursize)
+      if (initrd_ctx->components[i].buf)
+	{
+	  grub_memcpy (ptr, initrd_ctx->components[i].buf, cursize);
+	  newc = 1;
+	}
+      else if (grub_file_read (initrd_ctx->components[i].file, ptr, cursize)
 	  != cursize)
 	{
 	  if (!grub_errno)
@@ -331,5 +421,47 @@ grub_initrd_load (struct grub_linux_initrd_context *initrd_ctx,
     }
   free_dir (root);
   root = 0;
+  return GRUB_ERR_NONE;
+}
+
+grub_err_t
+grub_initrd_publish_key (const char *uuid, const char *key, grub_size_t key_len, const char *path)
+{
+  struct grub_key_publisher *cur = NULL;
+
+  FOR_LIST_ELEMENTS (cur, kpuber)
+    if (grub_uuidcasecmp (cur->name, uuid, sizeof (cur->name)) == 0)
+      break;
+
+  if (!cur)
+    cur = grub_zalloc (sizeof (*cur));
+  if (!cur)
+    return grub_errno;
+
+  if (key && key_len)
+    {
+      grub_free (cur->key);
+      cur->key = grub_malloc (key_len);
+      if (!cur->key)
+	{
+	  grub_free (cur);
+	  return grub_errno;
+	}
+      grub_memcpy (cur->key, key, key_len);
+      cur->key_len = key_len;
+    }
+
+  if (path)
+    {
+      grub_free (cur->path);
+      cur->path = grub_strdup (path);
+    }
+
+  if (!cur->name)
+    {
+      cur->name = grub_strdup (uuid);
+      grub_list_push (GRUB_AS_LIST_P (&kpuber), GRUB_AS_LIST (cur));
+    }
+
   return GRUB_ERR_NONE;
 }
