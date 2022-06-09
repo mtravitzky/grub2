@@ -30,6 +30,8 @@
 
 #ifdef GRUB_UTIL
 #include <grub/emu/hostdisk.h>
+#else
+#include <grub/linux.h>
 #endif
 
 GRUB_MOD_LICENSE ("GPLv3+");
@@ -1146,6 +1148,10 @@ grub_cryptodisk_scan_device_real (const char *name,
   dev = NULL;
 
  cleanup:
+#ifndef GRUB_UTIL
+  if (cargs->key_data && dev)
+    grub_initrd_publish_key (dev->uuid, (const char *)cargs->key_data, cargs->key_len, NULL);
+#endif
   if (askpass)
     {
       cargs->key_len = 0;

@@ -2635,3 +2635,8 @@ module = {
   cppflags = '$(CPPFLAGS_POSIX) $(CPPFLAGS_GNULIB)';
   enable = powerpc_ieee1275;
 };
+
+module = {
+  name = crypttab;
+  common = commands/crypttab.c;
+};
