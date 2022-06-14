@@ -51,6 +51,8 @@
 #include <grub/emu/misc.h>
 #include <grub/emu/hostdisk.h>
 
+#include <grub/cryptodisk.h>
+
 static int
 grub_util_open_dm (const char *os_dev, struct dm_tree **tree,
 		   struct dm_tree_node **node)
@@ -186,7 +188,6 @@ grub_util_pull_devmapper (const char *os_dev)
       && lastsubdev)
     {
       char *grdev = grub_util_get_grub_dev (lastsubdev);
-      dm_tree_free (tree);
       if (grdev)
 	{
 	  grub_err_t err;
@@ -194,7 +195,95 @@ grub_util_pull_devmapper (const char *os_dev)
 	  if (err)
 	    grub_util_error (_("can't mount encrypted volume `%s': %s"),
 			     lastsubdev, grub_errmsg);
+          if (strncmp (uuid, "CRYPT-LUKS2-", sizeof ("CRYPT-LUKS2-") - 1) == 0)
+            {
+              /* set LUKS2 cipher from dm parameters, since it is not
+               * possible to determine the correct one without
+               * unlocking, as there might be multiple segments.
+               */
+              grub_disk_t source;
+              grub_cryptodisk_t cryptodisk;
+              grub_uint64_t start, length;
+              char *target_type;
+              char *params;
+              const char *name;
+              char *cipher, *cipher_mode;
+              struct dm_task *dmt;
+              char *seek_head, *c;
+              unsigned int remaining;
+
+              source = grub_disk_open (grdev);
+              cryptodisk = grub_cryptodisk_get_by_source_disk (source);
+              grub_disk_close (source);
+
+              name = dm_tree_node_get_name (node);
+
+              grub_util_info ("populating parameters of cryptomount `%s' from DM device `%s'",
+                              uuid, name);
+
+              dmt = dm_task_create (DM_DEVICE_TABLE);
+              if (dmt == 0)
+                grub_util_error (_("can't create dm task DM_DEVICE_TABLE"));
+              if (dm_task_set_name (dmt, name) == 0)
+                grub_util_error (_("can't set dm task name to `%s'"), name);
+              if (dm_task_run (dmt) == 0)
+                grub_util_error (_("can't run dm task for `%s'"), name);
+              /* dm_get_next_target doesn't have any error modes, everything has
+               * been handled by dm_task_run.
+               */
+              dm_get_next_target (dmt, NULL, &start, &length,
+                                  &target_type, &params);
+              if (strncmp (target_type, "crypt", sizeof ("crypt")) != 0)
+                grub_util_error (_("dm target of type `%s' is not `crypt'"),
+                                 target_type);
+
+              /* dm target parameters for dm-crypt is
+               * <cipher> <key> <iv_offset> <device path> <offset> [<#opt_params> <opt_param1> ...]
+               */
+              c = params;
+              remaining = grub_strlen (c);
+
+              /* first, get the cipher name from the cipher */
+              if (!(seek_head = grub_memchr (c, '-', remaining)))
+                grub_util_error (_("can't get cipher from dm-crypt parameters `%s'"),
+                                 params);
+              cipher = grub_strndup (c, seek_head - c);
+              remaining -= seek_head - c + 1;
+              c = seek_head + 1;
+
+              /* now, the cipher mode */
+              if (!(seek_head = grub_memchr (c, ' ', remaining)))
+                grub_util_error (_("can't get cipher mode from dm-crypt parameters `%s'"),
+                                 params);
+              cipher_mode = grub_strndup (c, seek_head - c);
+              remaining -= seek_head - c + 1;
+              c = seek_head + 1;
+
+              err = grub_cryptodisk_setcipher (cryptodisk, cipher, cipher_mode);
+              if (err)
+                {
+                  grub_util_error (_("can't set cipher of cryptodisk `%s' to `%s' with mode `%s'"),
+                                   uuid, cipher, cipher_mode);
+                }
+
+              grub_free (cipher);
+              grub_free (cipher_mode);
+
+              /* This is the only hash usable by PBKDF2, and we don't
+               * have Argon2 support yet, so set it by default,
+               * otherwise grub-probe would miss the required
+               * abstraction
+               */
+              cryptodisk->hash = grub_crypto_lookup_md_by_name ("sha256");
+              if (cryptodisk->hash == 0)
+                {
+                  grub_util_error (_("can't lookup hash sha256 by name"));
+                }
+
+              dm_task_destroy (dmt);
+            }
 	}
+      dm_tree_free (tree);
       grub_free (grdev);
     }
   else
