@@ -203,7 +203,7 @@ grub_util_pull_devmapper (const char *os_dev)
                */
               grub_disk_t source;
               grub_cryptodisk_t cryptodisk;
-              grub_addr_t start, length;
+              grub_uint64_t start, length;
               char *target_type;
               char *params;
               const char *name;
