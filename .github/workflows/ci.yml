@@ -25,3 +25,9 @@ jobs:
       run: ./configure --with-platform=emu
     - name: make check
       run: make check || true
+    - name: 'Upload Artifact'
+      uses: actions/upload-artifact@v3
+      with:
+        name: assets
+        path: test-suite.log
+        retention-days: 5
