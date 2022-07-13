@@ -22,12 +22,18 @@ jobs:
     - name: bootstrap
       run: ./bootstrap
     - name: configure
-      run: ./configure --with-platform=emu
+      run: |
+        mkdir -p build-efi; cd build-efi
+        ../configure --with-platform=efi
+    - name: make
+    - run: make
     - name: make check
-      run: sudo make check || true
+      run: make check || true
     - name: 'Upload Artifact'
       uses: actions/upload-artifact@v3
       with:
         name: assets
-        path: test-suite.log
+        path: |
+          ./*.log
+          ./*.trs
         retention-days: 5
