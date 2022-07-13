@@ -182,6 +182,7 @@ case "${grub_modinfo_target_cpu}-${grub_modinfo_platform}" in
 	console=console
 	trim=1
 	qemuopts="-bios OVMF-ia32.fd $qemuopts"
+	netbootext=efi
 	;;
     x86_64-efi)
 	qemu=qemu-system-x86_64
@@ -189,6 +190,7 @@ case "${grub_modinfo_target_cpu}-${grub_modinfo_platform}" in
 	console=console
 	trim=1
 	qemuopts="-bios OVMF.fd $qemuopts"
+	netbootext=efi
 	;;
     arm64-efi)
 	qemu=qemu-system-aarch64
@@ -198,6 +200,7 @@ case "${grub_modinfo_target_cpu}-${grub_modinfo_platform}" in
 	qemuopts="-machine virt -cpu cortex-a57 -bios /usr/share/qemu-efi/QEMU_EFI.fd $qemuopts"
 	disk="device virtio-blk-device,drive=hd1 -drive if=none,id=hd1,file="
 	serial_port=
+	netbootext=efi
 	;;
      arm-efi)
 	qemu=qemu-system-arm
@@ -207,6 +210,7 @@ case "${grub_modinfo_target_cpu}-${grub_modinfo_platform}" in
 	qemuopts="-machine virt -bios /usr/share/ovmf-arm/QEMU_EFI.fd $qemuopts"
 	disk="device virtio-blk-device,drive=hd1 -drive if=none,id=hd1,file="
 	serial_port=efi0
+	netbootext=efi
 	;;
     *)
 	boot=hd
