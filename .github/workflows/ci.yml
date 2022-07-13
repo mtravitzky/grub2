@@ -21,19 +21,18 @@ jobs:
         sudo apt-get -y install texlive
     - name: bootstrap
       run: ./bootstrap
-    - name: configure
+    - name: run efi tests
       run: |
-        mkdir -p build-efi; cd build-efi
+        mkdir -p build-efi
+        cd build-efi
         ../configure --with-platform=efi
-    - name: make
-      run: make
-    - name: make check
-      run: make check || true
+        make
+        make check || true
     - name: 'Upload Artifact'
       uses: actions/upload-artifact@v3
       with:
         name: assets
         path: |
-          ./*.log
-          ./*.trs
+          build-efi/*.log
+          build-efi/*.trs
         retention-days: 5
