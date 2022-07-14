@@ -19,6 +19,7 @@ jobs:
         sudo apt-get update
         sudo apt-get -y build-dep grub2
         sudo apt-get -y install texlive ovmf
+        sudo apt-get -y install e2fsprogs hfsprogs ntfs-3g attr reiserfsprogs dosfstools util-linux xfsprogs f2fs-tools nilfs-tools genromfs exfatprogs udftools hfsprogs jfsutils btrfs-progs zfsutils-linux lzop
     - name: bootstrap
       run: ./bootstrap
     - name: run efi tests
@@ -27,7 +28,7 @@ jobs:
         cd build-efi
         ../configure --with-platform=efi
         make
-        make check
+        sudo make check
     - name: 'Upload Artifact'
       if: always()
       uses: actions/upload-artifact@v3
