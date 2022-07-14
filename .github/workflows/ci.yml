@@ -21,18 +21,30 @@ jobs:
         sudo apt-get -y install texlive ovmf
     - name: bootstrap
       run: ./bootstrap
+    - name: run emu tests
+      run: |
+        mkdir -p build-emu
+        cd build-emu
+        ../configure --with-platform=emu
+        make
+        make check
     - name: run efi tests
       run: |
         mkdir -p build-efi
         cd build-efi
         ../configure --with-platform=efi
         make
-        make check || true
+        make check
     - name: 'Upload Artifact'
+      if: always()
       uses: actions/upload-artifact@v3
       with:
         name: assets
         path: |
           build-efi/*.log
           build-efi/*.trs
+          build-emu/*.log
+          build-emu/*.trs
+          build-emu/*.bmp
+          build-emu/checksums.h
         retention-days: 5
