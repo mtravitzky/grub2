@@ -46,5 +46,6 @@ jobs:
           build-emu/*.log
           build-emu/*.trs
           build-emu/*.bmp
+          build-emu/*.pf2
           build-emu/checksums.h
         retention-days: 5
