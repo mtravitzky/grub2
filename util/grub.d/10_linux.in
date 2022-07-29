@@ -229,12 +229,56 @@ title_correction_code=
 # yet, so it's empty. In a submenu it will be equal to '\t' (one tab).
 submenu_indentation=""
 
+listvrf=""
+pre_sort () {
+    local l=""
+
+    for f in $list; do
+        vr="`echo $f | sed -e 's/[^-]*-//' -e 's/-\([^0-9]*\)$/\.\1/' -e 's/-/~/g' -e 's/~\([^~]*\)$/-\1/'`"
+        l="$l $vr"
+        listvrf="$listvrf $vr:$f"
+    done
+
+    list=$l
+}
+
+post_sort () {
+    local l=""
+    local vr=""
+    local f=""
+    local found=""
+
+    for i in $reverse_sorted_list; do
+        found=""
+        for vrf in $listvrf; do
+            vr=${vrf%%:*}
+            f=${vrf#*:}
+	    if test x"$vr" = x"$i"; then
+	        l="$l $f"
+	        found=$vrf
+	        break
+	    fi
+        done
+        if test -n "$found"; then
+            listvrf="`echo $listvrf | (sed -e 's!'$found'!!' 2>/dev/null || echo $listvrf)`"
+        fi
+    done
+
+    for vrf in $listvrf; do
+        f=${vrf#*:}
+        l="$l $f"
+    done
+
+    reverse_sorted_list=$l
+}
+pre_sort
 # Perform a reverse version sort on the entire list.
 # Temporarily replace the '.old' suffix by ' 1' and append ' 2' for all
 # other files to order the '.old' files after their non-old counterpart
 # in reverse-sorted order.
 
 reverse_sorted_list=$(echo $list | tr ' ' '\n' | sed -e 's/\.old$/ 1/; / 1$/! s/$/ 2/' | version_sort -r | sed -e 's/ 1$/.old/; s/ 2$//')
+post_sort
 
 if [ "x$GRUB_TOP_LEVEL" != x ]; then
   reverse_sorted_list=$(grub_move_to_front "$GRUB_TOP_LEVEL" ${reverse_sorted_list})
