@@ -376,7 +376,7 @@ program = {
   ldadd = grub-core/lib/gnulib/libgnu.a;
   ldadd = '$(LIBINTL) $(LIBDEVMAPPER) $(LIBUTIL) $(LIBZFS) $(LIBNVPAIR) $(LIBGEOM)';
   cppflags = '-DGRUB_SETUP_FUNC=grub_util_bios_setup';
-  emu_condition = COND_NOT_s390x;
+  emu_condition = COND_NOT_emu;
 };
 
 program = {
@@ -397,7 +397,7 @@ program = {
   ldadd = grub-core/lib/gnulib/libgnu.a;
   ldadd = '$(LIBINTL) $(LIBDEVMAPPER) $(LIBUTIL) $(LIBZFS) $(LIBNVPAIR) $(LIBGEOM)';
   cppflags = '-DGRUB_SETUP_FUNC=grub_util_sparc_setup';
-  emu_condition = COND_NOT_s390x;
+  emu_condition = COND_NOT_emu;
 };
 
 program = {
@@ -413,7 +413,7 @@ program = {
   ldadd = libgrubkern.a;
   ldadd = grub-core/lib/gnulib/libgnu.a;
   ldadd = '$(LIBINTL) $(LIBDEVMAPPER) $(LIBUTIL) $(LIBZFS) $(LIBNVPAIR) $(LIBGEOM)';
-  emu_condition = COND_NOT_s390x;
+  emu_condition = COND_NOT_emu;
 };
 
 program = {
@@ -444,7 +444,7 @@ program = {
   ldadd = libgrubkern.a;
   ldadd = grub-core/lib/gnulib/libgnu.a;
   ldadd = '$(LIBINTL) $(LIBDEVMAPPER) $(LIBUTIL) $(LIBZFS) $(LIBNVPAIR) $(LIBGEOM)';
-  emu_condition = COND_NOT_s390x;
+  emu_condition = COND_NOT_emu;
 };
 
 data = {
@@ -1389,7 +1389,7 @@ program = {
   ldadd = libgrubkern.a;
   ldadd = grub-core/lib/gnulib/libgnu.a;
   ldadd = '$(LIBINTL) $(LIBDEVMAPPER) $(LIBZFS) $(LIBNVPAIR) $(LIBGEOM)';
-  emu_condition = COND_NOT_s390x;
+  emu_condition = COND_NOT_emu;
 };
 
 program = {
