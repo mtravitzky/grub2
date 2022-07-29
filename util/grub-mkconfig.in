@@ -296,7 +296,8 @@ export GRUB_DEFAULT \
   GRUB_OS_PROBER_SKIP_LIST \
   GRUB_DISABLE_SUBMENU \
   GRUB_USE_LINUXEFI \
-  SUSE_BTRFS_SNAPSHOT_BOOTING
+  SUSE_BTRFS_SNAPSHOT_BOOTING \
+  SUSE_CMDLINE_XENEFI
 
 if test "x${grub_cfg}" != "x"; then
   rm -f "${grub_cfg}.new"
