@@ -1986,6 +1986,7 @@ AC_SUBST(BUILD_LIBM)
 
 AM_CONDITIONAL([COND_real_platform], [test x$platform != xnone])
 AM_CONDITIONAL([COND_emu], [test x$platform = xemu])
+AM_CONDITIONAL([COND_NOT_emu], [test x$platform != xemu])
 AM_CONDITIONAL([COND_arm], [test x$target_cpu = xarm ])
 AM_CONDITIONAL([COND_arm_uboot], [test x$target_cpu = xarm -a x$platform = xuboot])
 AM_CONDITIONAL([COND_arm_coreboot], [test x$target_cpu = xarm -a x$platform = xcoreboot])
