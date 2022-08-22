@@ -834,10 +834,21 @@ grub_cmd_chainloader (grub_command_t cmd __attribute__ ((unused)),
       /* If it failed with security violation while not in secure boot mode,
          the firmware might be broken. We try to workaround on that by forcing
          the SB method! (bsc#887793) */
+      struct grub_secureboot_chainloader_context *sb_context;
+
       grub_dprintf ("chain", "Possible firmware flaw! Security violation while not in secure boot mode.\n");
+      sb_context = grub_malloc (sizeof (*sb_context));
+      if (!sb_context)
+	goto fail;
+      sb_context->cmdline = cmdline;
+      sb_context->cmdline_len = cmdline_len;
+      sb_context->fsize = size;
+      sb_context->dev_handle = dev_handle;
+      sb_context->address = address;
+      sb_context->pages = pages;
       grub_file_close (file);
-      grub_loader_set (grub_secureboot_chainloader_boot,
-	      grub_secureboot_chainloader_unload, 0);
+      grub_loader_set_ex (grub_secureboot_chainloader_boot,
+	      grub_secureboot_chainloader_unload, sb_context, 0);
       return 0;
     }
 #endif
