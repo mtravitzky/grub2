@@ -195,7 +195,7 @@ grub_tpm2_protector_srk_unmarshal_keyfile (void *sealed_key,
   if (sealed_key_size > buf.cap)
     {
       grub_dprintf ("tpm2", "Sealed key file is larger than decode buffer "
-                            "(%lu vs %lu bytes).\n", sealed_key_size, buf.cap);
+                            "(%" PRIuGRUB_SIZE " vs %" PRIuGRUB_SIZE " bytes).\n", sealed_key_size, buf.cap);
       return GRUB_ERR_BAD_ARGUMENT;
     }
 
