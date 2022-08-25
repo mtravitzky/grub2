@@ -2173,6 +2173,7 @@ main (int argc, char *argv[])
 	      grub_util_error ("%s", _("failed to copy Grub to the PReP partition"));
 	      grub_set_install_backup_ponr ();
 	    }
+	  grub_set_install_backup_ponr ();
 
 	  if ((signed_grub_mode >= SIGNED_GRUB_FORCE) || ((signed_grub_mode == SIGNED_GRUB_AUTO) && (ppc_sb_state > 0)))
 	    {
