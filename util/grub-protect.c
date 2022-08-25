@@ -542,7 +542,7 @@ grub_protect_tpm2_get_policy_digest (struct grub_protect_args *args,
       if (pcr_values.digests[i].size != pcr_digest_len)
         {
           fprintf (stderr,
-                   _("Bad PCR value size: expected %lu bytes but got %u bytes.\n"),
+                   _("Bad PCR value size: expected %" PRIuGRUB_SIZE " bytes but got %u bytes.\n"),
                    pcr_digest_len, pcr_values.digests[i].size);
           goto exit2;
         }
