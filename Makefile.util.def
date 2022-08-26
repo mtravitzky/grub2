@@ -1301,7 +1301,7 @@ script = {
 };
 
 script = {
-  testcase;
+  testcase = native;
   name = test_asn1;
   common = tests/test_asn1.in;
 };
