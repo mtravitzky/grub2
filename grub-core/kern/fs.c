@@ -242,7 +242,7 @@ grub_fs_blocklist_read (grub_file_t file, char *buf, grub_size_t len)
 	      grub_disk_addr_t part_start;
 
 	      part_start = grub_partition_get_start (file->device->disk->partition);
-	      file->read_hook (p->offset + sector + part_start, (unsigned)offset, (unsigned)size, file->read_hook_data);
+	      file->read_hook (p->offset + sector + part_start, (unsigned)offset, (unsigned)size, NULL, file->read_hook_data);
 	    }
 	  ret += size;
 	  len -= size;
