@@ -1108,7 +1108,7 @@ grub_cryptodisk_scan_device_real (const char *name,
     {
       grub_error (GRUB_ERR_BAD_MODULE,
                   "no cryptodisk module can handle this device");
-      return error_no_close;
+      goto error_no_close;
     }
 
   if (cargs->protectors)
