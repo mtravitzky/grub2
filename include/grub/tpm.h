@@ -44,5 +44,6 @@ grub_err_t grub_tpm_measure (unsigned char *buf, grub_size_t size,
 			     grub_uint8_t pcr, const char *description);
 struct grub_tpm_digest *grub_tpm_read_pcr (grub_uint8_t index, const char *algo);
 void grub_tpm_digest_free (struct grub_tpm_digest *d);
+int grub_tpm_present (void);
 
 #endif
