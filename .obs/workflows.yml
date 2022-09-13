@@ -1,11 +1,11 @@
 workflow:
   steps:
     - link_package:
-        source_project: home:michael-chang:obs_scm-webhook
+        source_project: home:michael-chang:grub:devel
         source_package: grub2
-        target_project: home:michael-chang:obs_scm-webhook:CI
+        target_project: home:michael-chang:grub:devel:CI
     - configure_repositories:
-        project: home:michael-chang:obs_scm-webhook:CI
+        project: home:michael-chang:grub:devel:CI
         repositories:
           - name: openSUSE_Tumbleweed
             paths:
