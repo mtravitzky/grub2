@@ -2,9 +2,9 @@ name: CI unit test
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "opensuse/202210" ]
   pull_request:
-    branches: [ "master" ]
+    branches: [ "opensuse/202210" ]
 
 jobs:
   build:
