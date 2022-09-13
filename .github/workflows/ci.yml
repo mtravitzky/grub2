@@ -2,9 +2,9 @@ name: CI unit test
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "opensuse/202212" ]
   pull_request:
-    branches: [ "master" ]
+    branches: [ "opensuse/202212" ]
 
 jobs:
   build:
@@ -20,8 +20,8 @@ jobs:
         sudo apt-get -y build-dep grub2
         sudo apt-get -y install texlive ovmf
         sudo apt-get -y install e2fsprogs hfsprogs ntfs-3g attr reiserfsprogs dosfstools util-linux xfsprogs f2fs-tools nilfs-tools genromfs udftools hfsprogs jfsutils btrfs-progs zfsutils-linux lzop
-        sudo apt-get -y install exfat-utils
-        # sudo apt-get -y install exfatprogs
+        # sudo apt-get -y install exfat-utils
+        sudo apt-get -y install exfatprogs
     - name: bootstrap
       run: ./bootstrap
     - name: run efi tests
