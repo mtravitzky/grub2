@@ -22,6 +22,7 @@
 #include <grub/misc.h>
 #include <grub/mm.h>
 #include <grub/protector.h>
+#include <grub/time.h>
 #include <grub/tpm2/buffer.h>
 #include <grub/tpm2/internal/args.h>
 #include <grub/tpm2/mu.h>
@@ -449,6 +450,7 @@ grub_tpm2_protector_srk_recover (const struct grub_tpm2_protector_context *ctx,
     {
       grub_error (err, N_("Failed to unseal sealed key (TPM2_Unseal failed "
                           "with TSS/TPM error %u)"), rc);
+      grub_millisleep(500);
       goto exit4;
     }
 
@@ -460,6 +462,8 @@ grub_tpm2_protector_srk_recover (const struct grub_tpm2_protector_context *ctx,
       grub_error (err, N_("No memory left to allocate unlock key buffer"));
       goto exit4;
     }
+
+  grub_printf("TPM2: unsealed %u bytes of key material\n", data.size);
 
   if (ctx->efivar)
     {
