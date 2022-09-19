@@ -1462,8 +1462,9 @@ main (int argc, char *argv[])
 
   grub_util_unlink (load_cfg);
 
-  if (1)
+  if (platform == GRUB_INSTALL_PLATFORM_X86_64_EFI && have_cryptodisk)
     {
+      grub_install_push_module ("tpm");
       load_cfg_f = grub_util_fopen (load_cfg, "wb");
       have_load_cfg = 1;
       fprintf (load_cfg_f, "tpm_record_pcrs 0-9\n");
@@ -1471,7 +1472,8 @@ main (int argc, char *argv[])
 
   if (debug_image && debug_image[0])
     {
-      load_cfg_f = grub_util_fopen (load_cfg, "wb");
+      if (!load_cfg_f)
+	load_cfg_f = grub_util_fopen (load_cfg, "wb");
       have_load_cfg = 1;
       fprintf (load_cfg_f, "set debug='%s'\n",
 	      debug_image);
