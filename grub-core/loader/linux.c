@@ -171,6 +171,7 @@ grub_initrd_component (const char *buf, int bufsz, const char *newc_name,
   struct grub_linux_initrd_component *comp = initrd_ctx->components + initrd_ctx->nfiles;
   grub_size_t dir_size, name_len;
 
+  grub_printf("Creating initrd component \"%s\" with %u bytes\n", newc_name, bufsz);
   while (*newc_name == '/')
     newc_name++;
 
