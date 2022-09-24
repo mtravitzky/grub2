@@ -483,6 +483,8 @@ of_path_get_nvmeof_adapter_info(char* sysfs_path,
   buf3=strchr(buf2,'-')+1;
   buf3=strchr(buf3,'-')+1;
   nvmeof_info->target_wwpn = buf3;
+  buf3=strchr(buf3,'x')+1;
+  nvmeof_info->target_wwpn = buf3;
   buf3 = strchr(nvmeof_info->target_wwpn,',');
   *buf3 = '\0';
 
