@@ -392,6 +392,7 @@ kernel = {
   extra_dist = kern/i386/realmode.S;
   extra_dist = boot/i386/pc/lzma_decode.S;
   extra_dist = kern/mips/cache_flush.S;
+  efi = loader/efi/linux.c;
 };
 
 program = {
@@ -1861,7 +1862,6 @@ module = {
   riscv64 = loader/riscv/linux.c;
   emu = loader/emu/linux.c;
   common = loader/linux.c;
-  efi = loader/efi/linux.c;
 };
 
 module = {

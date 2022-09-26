@@ -23,6 +23,8 @@
 #include <grub/efi/efi.h>
 #include <grub/efi/pe32.h>
 #include <grub/efi/linux.h>
+#include <grub/kernel.h>
+#include <grub/loader.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wcast-align"
@@ -38,6 +40,8 @@ grub_efi_linux_boot (void *kernel_addr, grub_off_t handover_offset,
   int offset = 0;
 
 #ifdef __x86_64__
+  grub_efi_simple_text_output_interface_t *o;
+  o = grub_efi_system_table->con_out;
   offset = 512;
 #endif
 
@@ -55,9 +59,21 @@ grub_efi_linux_boot (void *kernel_addr, grub_off_t handover_offset,
   grub_dprintf ("linux", "kernel_addr: %p handover_offset: %p params: %p\n",
 		kernel_addr, (void *)(grub_efi_uintn_t)handover_offset, kernel_params);
   hf = (handover_func)((char *)kernel_addr + handover_offset + offset);
+#ifdef __x86_64__
+  grub_machine_fini (GRUB_LOADER_FLAG_NORETURN);
+#endif
   hf (grub_efi_image_handle, grub_efi_system_table, kernel_params);
 
+#ifdef __x86_64__
+  efi_call_2 (o->output_string, o, L"cannot boot linux kernel via efi handover\r\n"
+	      L"rebooting in 5 seconds... *\r\n");
+  efi_call_1 (grub_efi_system_table->boot_services->stall, 5000000);
+  efi_call_4 (grub_efi_system_table->runtime_services->reset_system,
+	      GRUB_EFI_RESET_COLD, GRUB_EFI_SUCCESS, 0, NULL);
+  for (;;) ;
+#else
   return GRUB_ERR_BUG;
+#endif
 }
 
 #pragma GCC diagnostic pop

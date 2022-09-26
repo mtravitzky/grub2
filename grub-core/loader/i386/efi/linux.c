@@ -91,6 +91,8 @@ kernel_alloc(grub_efi_uintn_t size, const char * const errmsg)
     {
       grub_uint64_t max = max_addresses[i].addr;
       grub_efi_uintn_t pages;
+      grub_efi_status_t status;
+      grub_efi_boot_services_t *b;
 
       /*
        * When we're *not* loading the kernel, or >4GB allocations aren't
@@ -105,9 +107,14 @@ kernel_alloc(grub_efi_uintn_t size, const char * const errmsg)
 		    pages, (void *)(grub_addr_t)max);
 
       prev_max = max;
-      addr = grub_efi_allocate_pages_real (max, pages,
-					   max_addresses[i].alloc_type,
-					   GRUB_EFI_LOADER_DATA);
+      b = grub_efi_system_table->boot_services;
+      status = efi_call_4 (b->allocate_pages, max_addresses[i].alloc_type, GRUB_EFI_LOADER_DATA, pages, &max);
+      if (status != GRUB_EFI_SUCCESS)
+	{
+	  grub_error (GRUB_ERR_OUT_OF_MEMORY, N_("out of memory"));
+	  max = 0;
+	}
+      addr = (void *) ((grub_addr_t) max);
       if (addr)
 	grub_dprintf ("linux", "Allocated at %p\n", addr);
     }
