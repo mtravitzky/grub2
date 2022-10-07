@@ -328,6 +328,8 @@ static grub_extcmd_t cmd;
 
 GRUB_MOD_INIT (tpm)
 {
+  if (!grub_tpm_present())
+    return;
   grub_verifier_register (&grub_tpm_verifier);
 
   cmd = grub_register_extcmd ("tpm_record_pcrs", grub_tpm_record_pcrs, 0,
@@ -338,6 +340,8 @@ GRUB_MOD_INIT (tpm)
 
 GRUB_MOD_FINI (tpm)
 {
+  if (!grub_tpm_present())
+    return;
   grub_verifier_unregister (&grub_tpm_verifier);
   grub_unregister_extcmd (cmd);
 }
