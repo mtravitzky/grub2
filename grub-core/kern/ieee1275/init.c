@@ -47,7 +47,7 @@
 #include <grub/lockdown.h>
 
 /* The maximum heap size we're going to claim. Not used by sparc.
-   We allocate 1/4 of the available memory under 4G, up to this limit. */
+   We allocate 1/3 of the available memory under 4G, up to this limit. */
 #ifdef __i386__
 #define HEAP_MAX_SIZE		(unsigned long) (64 * 1024 * 1024)
 #else // __powerpc__
@@ -415,7 +415,7 @@ grub_claim_heap (void)
 
   grub_machine_mmap_iterate (heap_size, &total);
 
-  total = total / 4;
+  total = total / 3;
   if (total > HEAP_MAX_SIZE)
     total = HEAP_MAX_SIZE;
 
