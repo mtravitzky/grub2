@@ -52,7 +52,7 @@ static grub_uint32_t cmdline_size;
 static grub_addr_t initrd_start;
 static grub_addr_t initrd_end;
 
-grub_err_t
+static grub_err_t
 grub_arch_efi_linux_check_image (struct linux_arch_kernel_header * lh)
 {
   if (lh->magic != GRUB_LINUX_ARMXX_MAGIC_SIGNATURE)
