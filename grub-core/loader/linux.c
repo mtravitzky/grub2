@@ -130,12 +130,23 @@ insert_dir (const char *name, struct dir **root,
 	  n->name = grub_strndup (cb, ce - cb);
 	  if (ptr)
 	    {
+	      /*
+	       * Create the substring with the trailing NUL byte
+	       * to be included in the cpio header.
+	       */
+	      char *tmp_name = grub_strndup (name, ce - name);
+	      if (!tmp_name) {
+		grub_free (n->name);
+		grub_free (n);
+		return grub_errno;
+	      }
 	      grub_dprintf ("linux", "Creating directory %s, %s\n", name, ce);
-	      ptr = make_header (ptr, name, ce - name,
+	      ptr = make_header (ptr, tmp_name, ce - name + 1,
 				 040777, 0);
+	      grub_free (tmp_name);
 	    }
 	  if (grub_add (*size,
-		        ALIGN_UP ((ce - (char *) name)
+		        ALIGN_UP ((ce - (char *) name + 1)
 				  + sizeof (struct newc_head), 4),
 			size))
 	    {
@@ -259,7 +270,7 @@ grub_initrd_init (int argc, char *argv[],
 		  grub_initrd_close (initrd_ctx);
 		  return grub_errno;
 		}
-	      name_len = grub_strlen (initrd_ctx->components[i].newc_name);
+	      name_len = grub_strlen (initrd_ctx->components[i].newc_name) + 1;
 	      if (grub_add (initrd_ctx->size,
 			    ALIGN_UP (sizeof (struct newc_head) + name_len, 4),
 			    &initrd_ctx->size) ||
@@ -273,7 +284,7 @@ grub_initrd_init (int argc, char *argv[],
 	{
 	  if (grub_add (initrd_ctx->size,
 			ALIGN_UP (sizeof (struct newc_head)
-				  + sizeof ("TRAILER!!!") - 1, 4),
+				  + sizeof ("TRAILER!!!"), 4),
 			&initrd_ctx->size))
 	    goto overflow;
 	  free_dir (root);
@@ -301,7 +312,7 @@ grub_initrd_init (int argc, char *argv[],
       initrd_ctx->size = ALIGN_UP (initrd_ctx->size, 4);
       if (grub_add (initrd_ctx->size,
 		    ALIGN_UP (sizeof (struct newc_head)
-			      + sizeof ("TRAILER!!!") - 1, 4),
+			      + sizeof ("TRAILER!!!"), 4),
 		    &initrd_ctx->size))
 	goto overflow;
       free_dir (root);
@@ -377,7 +388,7 @@ grub_initrd_load (struct grub_linux_initrd_context *initrd_ctx,
 	}
       else if (newc)
 	{
-	  ptr = make_header (ptr, "TRAILER!!!", sizeof ("TRAILER!!!") - 1,
+	  ptr = make_header (ptr, "TRAILER!!!", sizeof ("TRAILER!!!"),
 			     0, 0);
 	  free_dir (root);
 	  root = 0;
@@ -405,7 +416,7 @@ grub_initrd_load (struct grub_linux_initrd_context *initrd_ctx,
     {
       grub_memset (ptr, 0, ALIGN_UP_OVERHEAD (cursize, 4));
       ptr += ALIGN_UP_OVERHEAD (cursize, 4);
-      ptr = make_header (ptr, "TRAILER!!!", sizeof ("TRAILER!!!") - 1, 0, 0);
+      ptr = make_header (ptr, "TRAILER!!!", sizeof ("TRAILER!!!"), 0, 0);
     }
   free_dir (root);
   root = 0;
