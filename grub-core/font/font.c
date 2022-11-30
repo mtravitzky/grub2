@@ -445,7 +445,16 @@ grub_font_load (const char *filename)
 #endif
 
   if (filename[0] == '(' || filename[0] == '/' || filename[0] == '+')
-    file = grub_buffile_open (filename, GRUB_FILE_TYPE_FONT, 1024);
+    {
+      const char *name = grub_strrchr (filename, '/');
+      if (name)
+	{
+	  name++;
+	  file = try_open_from_prefix ("(memdisk)", name);
+	}
+      if (!file)
+	file = grub_buffile_open (filename, GRUB_FILE_TYPE_FONT, 1024);
+    }
   else
     {
       file = try_open_from_prefix ("(memdisk)", filename);
