@@ -64,6 +64,11 @@ _gcry_assert_failed (const char *expr, const char *file, int line,
   grub_fatal ("assertion %s at %s:%d (%s) failed\n", expr, file, line, func);
 }
 
+void __attribute__ ((noreturn))
+_gcry_divide_by_zero (void)
+{
+  grub_fatal ("divide by zero");
+}
 
 void _gcry_log_error (const char *fmt, ...)
 {
