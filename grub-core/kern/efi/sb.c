@@ -141,6 +141,10 @@ static struct pe_requirements kernel_pe_requirements = {
   .subsystem = GRUB_PE32_SUBSYSTEM_EFI_APPLICATION,
 };
 
+static struct pe_requirements wrapper_pe_requirements = {
+  .subsystem = GRUB_PE32_SUBSYSTEM_WINDOWS_GUI,
+};
+
 static grub_err_t
 shim_lock_verifier_init (grub_file_t io __attribute__ ((unused)),
 			 enum grub_file_type type,
@@ -160,6 +164,11 @@ shim_lock_verifier_init (grub_file_t io __attribute__ ((unused)),
     case GRUB_FILE_TYPE_PLAN9_KERNEL:
     case GRUB_FILE_TYPE_EFI_CHAINLOADED_IMAGE:
       *context = &kernel_pe_requirements;
+      *flags = GRUB_VERIFY_FLAGS_SINGLE_CHUNK;
+      return GRUB_ERR_NONE;
+
+    case GRUB_FILE_TYPE_FONT:
+      *context = &wrapper_pe_requirements;
       *flags = GRUB_VERIFY_FLAGS_SINGLE_CHUNK;
       return GRUB_ERR_NONE;
 
