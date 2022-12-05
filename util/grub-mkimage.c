@@ -347,7 +347,8 @@ main (int argc, char *argv[])
 			       arguments.image_target, arguments.note,
 			       arguments.appsig_size,
 			       arguments.comp, arguments.dtb,
-			       arguments.sbat, arguments.disable_shim_lock);
+			       arguments.sbat, arguments.disable_shim_lock,
+			       NULL, NULL);
 
   if (grub_util_file_sync (fp) < 0)
     grub_util_error (_("cannot sync `%s': %s"), arguments.output ? : "stdout",

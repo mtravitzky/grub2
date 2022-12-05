@@ -179,6 +179,8 @@ widthspec.bin
 /grub-sparc64-setup.exe
 /grub-syslinux2cfg
 /grub-syslinux2cfg.exe
+/grub-wrap
+/grub-wrap.exe
 /grub_cmd_date
 /grub_cmd_echo
 /grub_cmd_regexp

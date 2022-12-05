@@ -61,18 +61,20 @@
 /* use 2015-01-01T00:00:00+0000 as a stock timestamp */
 #define STABLE_EMBEDDING_TIMESTAMP 1420070400
 
+#define EFI_MAX_SECTIONS 5
+
 #define EFI32_HEADER_SIZE ALIGN_UP (GRUB_PE32_MSDOS_STUB_SIZE		\
 				    + GRUB_PE32_SIGNATURE_SIZE		\
 				    + sizeof (struct grub_pe32_coff_header) \
 				    + sizeof (struct grub_pe32_optional_header) \
-				    + 4 * sizeof (struct grub_pe32_section_table), \
+				    + EFI_MAX_SECTIONS * sizeof (struct grub_pe32_section_table), \
 				    GRUB_PE32_FILE_ALIGNMENT)
 
 #define EFI64_HEADER_SIZE ALIGN_UP (GRUB_PE32_MSDOS_STUB_SIZE		\
 				    + GRUB_PE32_SIGNATURE_SIZE		\
 				    + sizeof (struct grub_pe32_coff_header) \
 				    + sizeof (struct grub_pe64_optional_header) \
-				    + 4 * sizeof (struct grub_pe32_section_table), \
+				    + EFI_MAX_SECTIONS * sizeof (struct grub_pe32_section_table), \
 				    GRUB_PE32_FILE_ALIGNMENT)
 
 static const struct grub_install_image_target_desc image_targets[] =
@@ -819,15 +821,22 @@ grub_install_get_image_targets_string (void)
 /*
  * The image_target parameter is used by the grub_host_to_target32() macro.
  */
-static struct grub_pe32_section_table *
+static void
 init_pe_section(const struct grub_install_image_target_desc *image_target,
-		struct grub_pe32_section_table *section,
+		struct grub_pe32_section_table *section, int *n_sections,
 		const char * const name,
 		grub_uint32_t *vma, grub_uint32_t vsz, grub_uint32_t valign,
 		grub_uint32_t *rda, grub_uint32_t rsz,
 		grub_uint32_t characteristics)
 {
   size_t len = strlen (name);
+
+  if (vsz == 0)
+    return;
+
+  if (*n_sections >= EFI_MAX_SECTIONS)
+    grub_util_error (_("too many sections"));
+  section = &section[(*n_sections)++];
 
   if (len > sizeof (section->name))
     grub_util_error (_("section name %s length is bigger than %lu"),
@@ -844,8 +853,6 @@ init_pe_section(const struct grub_install_image_target_desc *image_target,
   (*rda) = ALIGN_UP (*rda + rsz, GRUB_PE32_FILE_ALIGNMENT);
 
   section->characteristics = grub_host_to_target32 (characteristics);
-
-  return section + 1;
 }
 
 /*
@@ -873,17 +880,22 @@ grub_install_generate_image (const char *dir, const char *prefix,
 			     const struct grub_install_image_target_desc *image_target,
 			     int note, size_t appsig_size, grub_compression_t comp,
 			     const char *dtb_path, const char *sbat_path, 
-			     int disable_shim_lock)
+			     int disable_shim_lock,
+			     const char *wrap_path, const char *wrap_section)
 {
-  char *kernel_img, *core_img;
+  char *kernel_img = NULL, *core_img;
   size_t total_module_size, core_size;
   size_t memdisk_size = 0, config_size = 0;
   size_t prefix_size = 0, dtb_size = 0, sbat_size = 0;
-  char *kernel_path;
-  size_t offset;
-  struct grub_util_path_list *path_list, *p;
+  char *kernel_path = NULL;
+  size_t offset = 0;
+  struct grub_util_path_list *path_list = NULL, *p;
   size_t decompress_size = 0;
   struct grub_mkimage_layout layout;
+  memset (&layout, 0, sizeof (layout));
+
+  if (wrap_path != NULL && image_target->id != IMAGE_EFI)
+    grub_util_error (_("wrapping is not supported by this target"));
 
   if (comp == GRUB_COMPRESSION_AUTO)
     comp = image_target->default_compression;
@@ -893,9 +905,12 @@ grub_install_generate_image (const char *dir, const char *prefix,
       || image_target->id == IMAGE_I386_PC_ELTORITO)
     comp = GRUB_COMPRESSION_LZMA;
 
-  path_list = grub_util_resolve_dependencies (dir, "moddep.lst", mods);
+  if (dir)
+    {
+      path_list = grub_util_resolve_dependencies (dir, "moddep.lst", mods);
 
-  kernel_path = grub_util_get_path (dir, "kernel.img");
+      kernel_path = grub_util_get_path (dir, "kernel.img");
+    }
 
   if (image_target->voidp_sizeof == 8)
     total_module_size = sizeof (struct grub_module_info64);
@@ -969,12 +984,16 @@ grub_install_generate_image (const char *dir, const char *prefix,
   grub_util_info ("the total module size is 0x%" GRUB_HOST_PRIxLONG_LONG,
 		  (unsigned long long) total_module_size);
 
-  if (image_target->voidp_sizeof == 4)
-    kernel_img = grub_mkimage_load_image32 (kernel_path, total_module_size,
-					    &layout, image_target);
-  else
-    kernel_img = grub_mkimage_load_image64 (kernel_path, total_module_size,
-					    &layout, image_target);
+  if (kernel_path)
+    {
+      if (image_target->voidp_sizeof == 4)
+	kernel_img = grub_mkimage_load_image32 (kernel_path, total_module_size,
+						&layout, image_target);
+      else
+	kernel_img = grub_mkimage_load_image64 (kernel_path, total_module_size,
+						&layout, image_target);
+    }
+
   if ((image_target->id == IMAGE_XEN || image_target->id == IMAGE_XEN_PVH) &&
       layout.align < 4096)
     layout.align = 4096;
@@ -990,37 +1009,40 @@ grub_install_generate_image (const char *dir, const char *prefix,
       memset (kernel_img, 0, total_module_size);
     }
 
-  if (image_target->voidp_sizeof == 8)
+  if (kernel_img)
     {
-      /* Fill in the grub_module_info structure.  */
-      struct grub_module_info64 *modinfo;
-      if (image_target->flags & PLATFORM_FLAGS_MODULES_BEFORE_KERNEL)
-	modinfo = (struct grub_module_info64 *) kernel_img;
+      if (image_target->voidp_sizeof == 8)
+	{
+	  /* Fill in the grub_module_info structure.  */
+	  struct grub_module_info64 *modinfo;
+	  if (image_target->flags & PLATFORM_FLAGS_MODULES_BEFORE_KERNEL)
+	    modinfo = (struct grub_module_info64 *) kernel_img;
+	  else
+	    modinfo = (struct grub_module_info64 *) (kernel_img + layout.kernel_size);
+	  modinfo->magic = grub_host_to_target32 (GRUB_MODULE_MAGIC);
+	  modinfo->offset = grub_host_to_target_addr (sizeof (struct grub_module_info64));
+	  modinfo->size = grub_host_to_target_addr (total_module_size);
+	  if (image_target->flags & PLATFORM_FLAGS_MODULES_BEFORE_KERNEL)
+	    offset = sizeof (struct grub_module_info64);
+	  else
+	    offset = layout.kernel_size + sizeof (struct grub_module_info64);
+	}
       else
-	modinfo = (struct grub_module_info64 *) (kernel_img + layout.kernel_size);
-      modinfo->magic = grub_host_to_target32 (GRUB_MODULE_MAGIC);
-      modinfo->offset = grub_host_to_target_addr (sizeof (struct grub_module_info64));
-      modinfo->size = grub_host_to_target_addr (total_module_size);
-      if (image_target->flags & PLATFORM_FLAGS_MODULES_BEFORE_KERNEL)
-	offset = sizeof (struct grub_module_info64);
-      else
-	offset = layout.kernel_size + sizeof (struct grub_module_info64);
-    }
-  else
-    {
-      /* Fill in the grub_module_info structure.  */
-      struct grub_module_info32 *modinfo;
-      if (image_target->flags & PLATFORM_FLAGS_MODULES_BEFORE_KERNEL)
-	modinfo = (struct grub_module_info32 *) kernel_img;
-      else
-	modinfo = (struct grub_module_info32 *) (kernel_img + layout.kernel_size);
-      modinfo->magic = grub_host_to_target32 (GRUB_MODULE_MAGIC);
-      modinfo->offset = grub_host_to_target_addr (sizeof (struct grub_module_info32));
-      modinfo->size = grub_host_to_target_addr (total_module_size);
-      if (image_target->flags & PLATFORM_FLAGS_MODULES_BEFORE_KERNEL)
-	offset = sizeof (struct grub_module_info32);
-      else
-	offset = layout.kernel_size + sizeof (struct grub_module_info32);
+	{
+	  /* Fill in the grub_module_info structure.  */
+	  struct grub_module_info32 *modinfo;
+	  if (image_target->flags & PLATFORM_FLAGS_MODULES_BEFORE_KERNEL)
+	    modinfo = (struct grub_module_info32 *) kernel_img;
+	  else
+	    modinfo = (struct grub_module_info32 *) (kernel_img + layout.kernel_size);
+	  modinfo->magic = grub_host_to_target32 (GRUB_MODULE_MAGIC);
+	  modinfo->offset = grub_host_to_target_addr (sizeof (struct grub_module_info32));
+	  modinfo->size = grub_host_to_target_addr (total_module_size);
+	  if (image_target->flags & PLATFORM_FLAGS_MODULES_BEFORE_KERNEL)
+	    offset = sizeof (struct grub_module_info32);
+	  else
+	    offset = layout.kernel_size + sizeof (struct grub_module_info32);
+	}
     }
 
   for (p = path_list; p; p = p->next)
@@ -1140,12 +1162,21 @@ grub_install_generate_image (const char *dir, const char *prefix,
       offset += prefix_size;
     }
 
-  grub_util_info ("kernel_img=%p, kernel_size=0x%" GRUB_HOST_PRIxLONG_LONG,
-		  kernel_img,
-		  (unsigned long long) layout.kernel_size);
-  compress_kernel (image_target, kernel_img, layout.kernel_size + total_module_size,
-		   &core_img, &core_size, comp);
-  free (kernel_img);
+  if (kernel_img)
+    {
+      grub_util_info ("kernel_img=%p, kernel_size=0x%" GRUB_HOST_PRIxLONG_LONG,
+		      kernel_img,
+		      (unsigned long long) layout.kernel_size);
+      compress_kernel (image_target, kernel_img, layout.kernel_size + total_module_size,
+		       &core_img, &core_size, comp);
+      free (kernel_img);
+    }
+
+  if (wrap_path)
+    {
+      core_size = grub_util_get_image_size (wrap_path);
+      core_img = grub_util_read_image (wrap_path);
+    }
 
   grub_util_info ("the core size is 0x%" GRUB_HOST_PRIxLONG_LONG,
 		  (unsigned long long) core_size);
@@ -1344,7 +1375,7 @@ grub_install_generate_image (const char *dir, const char *prefix,
       {
 	char *pe_img, *pe_sbat, *header;
 	struct grub_pe32_section_table *section;
-	size_t n_sections = 4;
+	int n_sections = 0;
 	size_t scn_size;
 	grub_uint32_t vma, raw_data;
 	size_t pe_size, header_size;
@@ -1381,17 +1412,15 @@ grub_install_generate_image (const char *dir, const char *prefix,
 	c = (struct grub_pe32_coff_header *) (header + GRUB_PE32_MSDOS_STUB_SIZE
 					      + GRUB_PE32_SIGNATURE_SIZE);
 	c->machine = grub_host_to_target16 (image_target->pe_target);
-
-	if (sbat_path != NULL)
-	  n_sections++;
-
-	c->num_sections = grub_host_to_target16 (n_sections);
 	c->time = grub_host_to_target32 (STABLE_EMBEDDING_TIMESTAMP);
 	c->characteristics = grub_host_to_target16 (GRUB_PE32_EXECUTABLE_IMAGE
 						    | GRUB_PE32_LINE_NUMS_STRIPPED
 						    | ((image_target->voidp_sizeof == 4)
 						       ? GRUB_PE32_32BIT_MACHINE
 						       : 0)
+						    | ((wrap_path == NULL)
+						       ? 0
+						       : GRUB_PE32_DLL)
 						    | GRUB_PE32_LOCAL_SYMS_STRIPPED
 						    | GRUB_PE32_DEBUG_STRIPPED);
 
@@ -1429,7 +1458,13 @@ grub_install_generate_image (const char *dir, const char *prefix,
 	PE_OHDR (o32, o64, image_size) = grub_host_to_target32 (pe_size);
 	PE_OHDR (o32, o64, section_alignment) = grub_host_to_target32 (image_target->section_align);
 	PE_OHDR (o32, o64, file_alignment) = grub_host_to_target32 (GRUB_PE32_FILE_ALIGNMENT);
-	PE_OHDR (o32, o64, subsystem) = grub_host_to_target16 (GRUB_PE32_SUBSYSTEM_EFI_APPLICATION);
+	PE_OHDR (o32, o64, subsystem) = grub_host_to_target16 ((wrap_path == NULL)
+							       ? GRUB_PE32_SUBSYSTEM_EFI_APPLICATION
+							       : GRUB_PE32_SUBSYSTEM_WINDOWS_GUI);
+	PE_OHDR (o32, o64, dll_characteristics) = grub_host_to_target16 ((wrap_path == NULL)
+									 ? 0
+									 : GRUB_PE32_DLLCHARACTERISTICS_DYNAMIC_BASE
+									   | GRUB_PE32_DLLCHARACTERISTICS_NX_COMPAT);
 
 	/* Do these really matter? */
 	PE_OHDR (o32, o64, stack_reserve_size) = grub_host_to_target32 (0x10000);
@@ -1445,13 +1480,13 @@ grub_install_generate_image (const char *dir, const char *prefix,
 #if __GNUC__ >= 12
 #pragma GCC diagnostic pop
 #endif
-	section = init_pe_section (image_target, section, ".text",
-				   &vma, layout.exec_size,
-				   image_target->section_align,
-				   &raw_data, layout.exec_size,
-				   GRUB_PE32_SCN_CNT_CODE |
-				   GRUB_PE32_SCN_MEM_EXECUTE |
-				   GRUB_PE32_SCN_MEM_READ);
+	init_pe_section (image_target, section, &n_sections, ".text",
+			 &vma, layout.exec_size,
+			 image_target->section_align,
+			 &raw_data, layout.exec_size,
+			 GRUB_PE32_SCN_CNT_CODE |
+			 GRUB_PE32_SCN_MEM_EXECUTE |
+			 GRUB_PE32_SCN_MEM_READ);
 
 	scn_size = ALIGN_UP (layout.kernel_size - layout.exec_size, GRUB_PE32_FILE_ALIGNMENT);
 #if __GNUC__ >= 12
@@ -1459,39 +1494,55 @@ grub_install_generate_image (const char *dir, const char *prefix,
 #pragma GCC diagnostic ignored "-Wdangling-pointer"
 #endif
 	/* ALIGN_UP (sbat_size, GRUB_PE32_FILE_ALIGNMENT) is done earlier. */
-	PE_OHDR (o32, o64, data_size) = grub_host_to_target32 (scn_size + sbat_size +
-							       ALIGN_UP (total_module_size,
-									 GRUB_PE32_FILE_ALIGNMENT));
+	PE_OHDR (o32, o64, data_size) = grub_host_to_target32 ((wrap_path == NULL)
+							       ? scn_size + sbat_size +
+								 ALIGN_UP (total_module_size,
+									   GRUB_PE32_FILE_ALIGNMENT)
+							       : sbat_size +
+								 ALIGN_UP (core_size,
+									   GRUB_PE32_FILE_ALIGNMENT));
 #if __GNUC__ >= 12
 #pragma GCC diagnostic pop
 #endif
 
-	section = init_pe_section (image_target, section, ".data",
-				   &vma, scn_size, image_target->section_align,
-				   &raw_data, scn_size,
-				   GRUB_PE32_SCN_CNT_INITIALIZED_DATA |
-				   GRUB_PE32_SCN_MEM_READ |
-				   GRUB_PE32_SCN_MEM_WRITE);
+	init_pe_section (image_target, section, &n_sections, ".data",
+			 &vma, scn_size, image_target->section_align,
+			 &raw_data, scn_size,
+			 GRUB_PE32_SCN_CNT_INITIALIZED_DATA |
+			 GRUB_PE32_SCN_MEM_READ |
+			 GRUB_PE32_SCN_MEM_WRITE);
 
-	scn_size = pe_size - layout.reloc_size - sbat_size - raw_data;
-	section = init_pe_section (image_target, section, "mods",
-				   &vma, scn_size, image_target->section_align,
-				   &raw_data, scn_size,
-				   GRUB_PE32_SCN_CNT_INITIALIZED_DATA |
-				   GRUB_PE32_SCN_MEM_READ |
-				   GRUB_PE32_SCN_MEM_WRITE);
+        if (wrap_path == NULL)
+	  {
+	    scn_size = pe_size - layout.reloc_size - sbat_size - raw_data;
+	    init_pe_section (image_target, section, &n_sections, "mods",
+			     &vma, scn_size, image_target->section_align,
+			     &raw_data, scn_size,
+			     GRUB_PE32_SCN_CNT_INITIALIZED_DATA |
+			     GRUB_PE32_SCN_MEM_READ |
+			     GRUB_PE32_SCN_MEM_WRITE);
+	  }
+	else
+	  {
+	    init_pe_section (image_target, section, &n_sections, wrap_section,
+			     &vma, core_size,
+			     image_target->section_align,
+			     &raw_data, ALIGN_UP(core_size, GRUB_PE32_FILE_ALIGNMENT),
+			     GRUB_PE32_SCN_CNT_INITIALIZED_DATA |
+			     GRUB_PE32_SCN_MEM_READ);
+	  }
 
 	if (sbat_path != NULL)
 	  {
 	    pe_sbat = pe_img + raw_data;
 	    grub_util_load_image (sbat_path, pe_sbat);
 
-	    section = init_pe_section (image_target, section, ".sbat",
-				       &vma, sbat_size,
-				       image_target->section_align,
-				       &raw_data, sbat_size,
-				       GRUB_PE32_SCN_CNT_INITIALIZED_DATA |
-				       GRUB_PE32_SCN_MEM_READ);
+	    init_pe_section (image_target, section, &n_sections, ".sbat",
+			     &vma, sbat_size,
+			     image_target->section_align,
+			     &raw_data, sbat_size,
+			     GRUB_PE32_SCN_CNT_INITIALIZED_DATA |
+			     GRUB_PE32_SCN_MEM_READ);
 	  }
 
 	scn_size = layout.reloc_size;
@@ -1499,18 +1550,20 @@ grub_install_generate_image (const char *dir, const char *prefix,
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdangling-pointer"
 #endif
-	PE_OHDR (o32, o64, base_relocation_table.rva) = grub_host_to_target32 (vma);
+	PE_OHDR (o32, o64, base_relocation_table.rva) = grub_host_to_target32 ((scn_size > 0) ? vma : 0);
 	PE_OHDR (o32, o64, base_relocation_table.size) = grub_host_to_target32 (scn_size);
 #if __GNUC__ >= 12
 #pragma GCC diagnostic pop
 #endif
 	memcpy (pe_img + raw_data, layout.reloc_section, scn_size);
-	init_pe_section (image_target, section, ".reloc",
+	init_pe_section (image_target, section, &n_sections, ".reloc",
 			 &vma, scn_size, image_target->section_align,
 			 &raw_data, scn_size,
 			 GRUB_PE32_SCN_CNT_INITIALIZED_DATA |
 			 GRUB_PE32_SCN_MEM_DISCARDABLE |
 			 GRUB_PE32_SCN_MEM_READ);
+
+	c->num_sections = grub_host_to_target16 (n_sections);
 
 	free (core_img);
 	core_img = pe_img;

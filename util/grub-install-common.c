@@ -710,7 +710,7 @@ grub_install_make_image_wrap_file (const char *dir, const char *prefix,
 			       pubkeys, npubkeys, x509keys, nx509keys,
 			       config_path, tgt,
 			       note, appsig_size, compression, dtb, sbat,
-			       disable_shim_lock);
+			       disable_shim_lock, NULL, NULL);
   while (dc--)
     grub_install_pop_module ();
 }

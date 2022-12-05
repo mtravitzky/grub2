@@ -198,7 +198,8 @@ grub_install_generate_image (const char *dir, const char *prefix,
 			     const struct grub_install_image_target_desc *image_target,
 			     int note, size_t appsig_size,
 			     grub_compression_t comp, const char *dtb_file,
-			     const char *sbat_path, const int disable_shim_lock);
+			     const char *sbat_path, const int disable_shim_lock,
+			     const char *wrap_path, const char *wrap_section);
 
 const struct grub_install_image_target_desc *
 grub_install_get_image_target (const char *arg);
