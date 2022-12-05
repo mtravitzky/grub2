@@ -20,6 +20,8 @@
 #define GRUB_EFI_PE32_HEADER	1
 
 #include <grub/types.h>
+#include <grub/mm.h>
+#include <grub/safemath.h>
 #include <grub/efi/memory.h>
 
 /* The MSDOS compatibility stub. This was copied from the output of
@@ -280,9 +282,11 @@ struct grub_pe_image_header
 #if GRUB_TARGET_SIZEOF_VOID_P == 8
   /* The Optional header.  */
   struct grub_pe64_optional_header optional_header;
+#define GRUB_PE32_OHDR_MAGIC GRUB_PE32_PE64_MAGIC
 #else
   /* The Optional header.  */
   struct grub_pe32_optional_header optional_header;
+#define GRUB_PE32_OHDR_MAGIC GRUB_PE32_PE32_MAGIC
 #endif
 };
 
@@ -342,5 +346,76 @@ struct grub_pe32_reloc
 
 #define GRUB_PE32_REL_I386_DIR32	0x6
 #define GRUB_PE32_REL_I386_REL32	0x14
+
+/*
+ * Get offset of PE image header of given in-memory file, as grub_uint32_t.
+ * Returns 0 if magic numbers are not found or header location is illegal.
+ */
+static inline grub_uint32_t
+grub_pe32_get_pe_image_header (const void *buffer, grub_size_t size)
+{
+  grub_uint16_t magic;
+  grub_uint32_t offset, end;
+  const struct grub_msdos_image_header *msdos_hdr;
+  const struct grub_pe_image_header *pe_hdr;
+
+  if (size < sizeof (*msdos_hdr))
+    return 0;
+  msdos_hdr = buffer;
+
+  magic = grub_cpu_to_le16 (GRUB_PE32_MAGIC);
+  if (grub_memcmp (&msdos_hdr->msdos_magic, &magic, sizeof (magic)) != 0)
+    return 0;
+
+  grub_memcpy (&offset, &msdos_hdr->pe_image_header_offset, sizeof (offset));
+  offset = grub_le_to_cpu32 (offset);
+  if (grub_add (offset, sizeof (*pe_hdr), &end) || end > size)
+    return 0;
+  pe_hdr = (const void *) ((const char *) buffer + offset);
+
+  if (grub_memcmp (&pe_hdr->signature, "PE\0\0", GRUB_PE32_SIGNATURE_SIZE) != 0)
+    return 0;
+
+  magic = grub_cpu_to_le16 (GRUB_PE32_OHDR_MAGIC);
+  if (grub_memcmp (&pe_hdr->optional_header.magic, &magic, sizeof (magic)) != 0)
+    return 0;
+
+  return offset;
+}
+
+/*
+ * Get offset of PE section table of given in-memory file, as grub_uint32_t.
+ * `pe_image_header` should be the value returned by grub_pe32_get_pe_image_header().
+ * Number of sections is stored at `*num_sections`, as grub_uint16_t.
+ * Returns 0 if section table's location is illegal.
+ */
+static inline grub_uint32_t
+grub_pe32_get_section_table (const void *buffer, grub_size_t size,
+			     grub_uint32_t pe_image_header,
+			     grub_uint16_t *num_sections)
+{
+  grub_uint32_t offset, length, end;
+  const struct grub_pe_image_header *pe_hdr;
+  grub_uint16_t ohdr_size, section_count;
+
+  /* grub_pe32_get_pe_image_header() has already checked boundaries. */
+  pe_hdr = (const void *) ((const char *) buffer + pe_image_header);
+  offset = pe_image_header + (grub_uint32_t) ((const char *) &pe_hdr->optional_header - (const char *) pe_hdr);
+
+  grub_memcpy (&ohdr_size, &pe_hdr->coff_header.optional_header_size, sizeof (ohdr_size));
+  ohdr_size = grub_le_to_cpu16 (ohdr_size);
+  if (grub_add (offset, ohdr_size, &offset))
+    return 0;
+
+  grub_memcpy (&section_count, &pe_hdr->coff_header.num_sections, sizeof (section_count));
+  section_count = grub_le_to_cpu16 (section_count);
+  if (grub_mul (section_count, sizeof (struct grub_pe32_section_table), &length))
+    return 0;
+  if (grub_add (offset, length, &end) || end > size)
+    return 0;
+
+  *num_sections = section_count;
+  return offset;
+}
 
 #endif /* ! GRUB_EFI_PE32_HEADER */

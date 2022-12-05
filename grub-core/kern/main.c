@@ -30,6 +30,7 @@
 #include <grub/reader.h>
 #include <grub/parser.h>
 #include <grub/verify.h>
+#include <grub/unwrap.h>
 
 #ifdef GRUB_MACHINE_PCBIOS
 #include <grub/machine/memory.h>
@@ -280,6 +281,8 @@ grub_main (void)
 
   /* Init verifiers API. */
   grub_verifiers_init ();
+
+  grub_unwrap_init ();
 
   grub_load_config ();
 
