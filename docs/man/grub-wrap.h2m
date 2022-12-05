@@ -1,0 +1,4 @@
+[NAME]
+grub-wrap \- Wrap a file as a PE image
+[DESCRIPTION]
+grub-wrap wraps a file as a PE image.
