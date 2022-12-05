@@ -113,12 +113,41 @@ grub_efi_get_secureboot (void)
   return secureboot;
 }
 
+struct pe_requirements {
+  grub_uint16_t subsystem;
+};
+
+static bool verify_pe_requirements (void *buf, grub_size_t size,
+				   struct pe_requirements *constraints)
+{
+  grub_uint32_t pe_image_header;
+  struct grub_pe_image_header *pe_hdr;
+  grub_uint16_t subsystem;
+
+  pe_image_header = grub_pe32_get_pe_image_header (buf, size);
+  if (pe_image_header == 0)
+    return false;
+  pe_hdr = (void *) ((char *) buf + pe_image_header);
+
+  grub_memcpy (&subsystem, &pe_hdr->optional_header.subsystem, sizeof (subsystem));
+  subsystem = grub_le_to_cpu16 (subsystem);
+  if (subsystem != constraints->subsystem)
+    return false;
+
+  return true;
+}
+
+static struct pe_requirements kernel_pe_requirements = {
+  .subsystem = GRUB_PE32_SUBSYSTEM_EFI_APPLICATION,
+};
+
 static grub_err_t
 shim_lock_verifier_init (grub_file_t io __attribute__ ((unused)),
 			 enum grub_file_type type,
-			 void **context __attribute__ ((unused)),
+			 void **context,
 			 enum grub_verify_flags *flags)
 {
+  *context = NULL;
   *flags = GRUB_VERIFY_FLAGS_NONE;
 
   switch (type & GRUB_FILE_TYPE_MASK)
@@ -130,6 +159,7 @@ shim_lock_verifier_init (grub_file_t io __attribute__ ((unused)),
     case GRUB_FILE_TYPE_XNU_KERNEL:
     case GRUB_FILE_TYPE_PLAN9_KERNEL:
     case GRUB_FILE_TYPE_EFI_CHAINLOADED_IMAGE:
+      *context = &kernel_pe_requirements;
       *flags = GRUB_VERIFY_FLAGS_SINGLE_CHUNK;
       return GRUB_ERR_NONE;
 
@@ -171,7 +201,7 @@ shim_lock_verifier_init (grub_file_t io __attribute__ ((unused)),
 }
 
 static grub_err_t
-shim_lock_verifier_write (void *context __attribute__ ((unused)), void *buf, grub_size_t size)
+shim_lock_verifier_write (void *context, void *buf, grub_size_t size)
 {
   grub_efi_shim_lock_protocol_t *sl = grub_efi_locate_protocol (&shim_lock_guid, 0);
 
@@ -180,6 +210,9 @@ shim_lock_verifier_write (void *context __attribute__ ((unused)), void *buf, gru
 
   if (sl->verify (buf, size) != GRUB_EFI_SUCCESS)
     return grub_error (GRUB_ERR_BAD_SIGNATURE, N_("bad shim signature"));
+
+  if (!verify_pe_requirements (buf, size, context))
+    return grub_error (GRUB_ERR_BAD_FILE_TYPE, N_("bad file type"));
 
   return GRUB_ERR_NONE;
 }
