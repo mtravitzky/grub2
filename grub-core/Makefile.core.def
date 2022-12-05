@@ -149,6 +149,7 @@ kernel = {
   common = kern/rescue_reader.c;
   common = kern/term.c;
   common = kern/verifiers.c;
+  common = kern/unwrap.c;
 
   noemu = kern/compiler-rt.c;
   noemu = kern/mm.c;
