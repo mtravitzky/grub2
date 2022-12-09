@@ -585,14 +585,15 @@ serpent_key_prepare (const byte *key, unsigned int key_length,
   int i;
 
   /* Copy key.  */
-  memcpy (key_prepared, key, key_length);
-  key_length /= 4;
+  for (i = 0; i < key_length / 4; i++)
+    {
 #ifdef WORDS_BIGENDIAN
-  for (i = 0; i < key_length; i++)
-    key_prepared[i] = byte_swap_32 (key_prepared[i]);
+      key_prepared[i] = byte_swap_32 (((u32 *) key)[i]);
 #else
-  i = key_length;
+      key_prepared[i] = ((u32 *) key)[i];
 #endif
+    }
+
   if (i < 8)
     {
       /* Key must be padded according to the Serpent
@@ -706,17 +707,21 @@ serpent_setkey (void *ctx,
 
 static void
 serpent_encrypt_internal (serpent_context_t *context,
-			  const byte *input, byte *output)
+			  const serpent_block_t input, serpent_block_t output)
 {
   serpent_block_t b, b_next;
   int round = 0;
 
-  memcpy (b, input, sizeof (b));
 #ifdef WORDS_BIGENDIAN
-  b[0] = byte_swap_32 (b[0]);
-  b[1] = byte_swap_32 (b[1]);
-  b[2] = byte_swap_32 (b[2]);
-  b[3] = byte_swap_32 (b[3]);
+  b[0] = byte_swap_32 (input[0]);
+  b[1] = byte_swap_32 (input[1]);
+  b[2] = byte_swap_32 (input[2]);
+  b[3] = byte_swap_32 (input[3]);
+#else
+  b[0] = input[0];
+  b[1] = input[1];
+  b[2] = input[2];
+  b[3] = input[3];
 #endif
 
   ROUND (0, context->keys, b, b_next);
@@ -754,27 +759,35 @@ serpent_encrypt_internal (serpent_context_t *context,
   ROUND_LAST (7, context->keys, b, b_next);
 
 #ifdef WORDS_BIGENDIAN
-  b_next[0] = byte_swap_32 (b_next[0]);
-  b_next[1] = byte_swap_32 (b_next[1]);
-  b_next[2] = byte_swap_32 (b_next[2]);
-  b_next[3] = byte_swap_32 (b_next[3]);
+  output[0] = byte_swap_32 (b_next[0]);
+  output[1] = byte_swap_32 (b_next[1]);
+  output[2] = byte_swap_32 (b_next[2]);
+  output[3] = byte_swap_32 (b_next[3]);
+#else
+  output[0] = b_next[0];
+  output[1] = b_next[1];
+  output[2] = b_next[2];
+  output[3] = b_next[3];
 #endif
-  memcpy (output, b_next, sizeof (b_next));
 }
 
 static void
 serpent_decrypt_internal (serpent_context_t *context,
-			  const byte *input, byte *output)
+			  const serpent_block_t input, serpent_block_t output)
 {
   serpent_block_t b, b_next;
   int round = ROUNDS;
 
-  memcpy (b_next, input, sizeof (b));
 #ifdef WORDS_BIGENDIAN
-  b_next[0] = byte_swap_32 (b_next[0]);
-  b_next[1] = byte_swap_32 (b_next[1]);
-  b_next[2] = byte_swap_32 (b_next[2]);
-  b_next[3] = byte_swap_32 (b_next[3]);
+  b_next[0] = byte_swap_32 (input[0]);
+  b_next[1] = byte_swap_32 (input[1]);
+  b_next[2] = byte_swap_32 (input[2]);
+  b_next[3] = byte_swap_32 (input[3]);
+#else
+  b_next[0] = input[0];
+  b_next[1] = input[1];
+  b_next[2] = input[2];
+  b_next[3] = input[3];
 #endif
 
   ROUND_FIRST_INVERSE (7, context->keys, b_next, b);
@@ -811,13 +824,18 @@ serpent_decrypt_internal (serpent_context_t *context,
   ROUND_INVERSE (1, context->keys, b, b_next);
   ROUND_INVERSE (0, context->keys, b, b_next);
 
+
 #ifdef WORDS_BIGENDIAN
-  b_next[0] = byte_swap_32 (b_next[0]);
-  b_next[1] = byte_swap_32 (b_next[1]);
-  b_next[2] = byte_swap_32 (b_next[2]);
-  b_next[3] = byte_swap_32 (b_next[3]);
+  output[0] = byte_swap_32 (b_next[0]);
+  output[1] = byte_swap_32 (b_next[1]);
+  output[2] = byte_swap_32 (b_next[2]);
+  output[3] = byte_swap_32 (b_next[3]);
+#else
+  output[0] = b_next[0];
+  output[1] = b_next[1];
+  output[2] = b_next[2];
+  output[3] = b_next[3];
 #endif
-  memcpy (output, b_next, sizeof (b_next));
 }
 
 static void
@@ -825,7 +843,8 @@ serpent_encrypt (void *ctx, byte *buffer_out, const byte *buffer_in)
 {
   serpent_context_t *context = ctx;
 
-  serpent_encrypt_internal (context, buffer_in, buffer_out);
+  serpent_encrypt_internal (context,
+			    (const u32 *) buffer_in, (u32 *) buffer_out);
   _gcry_burn_stack (2 * sizeof (serpent_block_t));
 }
 
@@ -834,7 +853,9 @@ serpent_decrypt (void *ctx, byte *buffer_out, const byte *buffer_in)
 {
   serpent_context_t *context = ctx;
 
-  serpent_decrypt_internal (context, buffer_in, buffer_out);
+  serpent_decrypt_internal (context,
+			    (const u32 *) buffer_in,
+			    (u32 *) buffer_out);
   _gcry_burn_stack (2 * sizeof (serpent_block_t));
 }
 
@@ -893,7 +914,9 @@ serpent_test (void)
     {
       serpent_setkey_internal (&context, test_data[i].key,
                                test_data[i].key_length);
-      serpent_encrypt_internal (&context, test_data[i].text_plain, scratch);
+      serpent_encrypt_internal (&context,
+				(const u32 *) test_data[i].text_plain,
+				(u32 *) scratch);
 
       if (memcmp (scratch, test_data[i].text_cipher, sizeof (serpent_block_t)))
 	switch (test_data[i].key_length)
@@ -906,7 +929,9 @@ serpent_test (void)
 	    return "Serpent-256 test encryption failed.";
 	  }
 
-    serpent_decrypt_internal (&context, test_data[i].text_cipher, scratch);
+    serpent_decrypt_internal (&context,
+			      (const u32 *) test_data[i].text_cipher,
+			      (u32 *) scratch);
     if (memcmp (scratch, test_data[i].text_plain, sizeof (serpent_block_t)))
       switch (test_data[i].key_length)
 	{

@@ -118,6 +118,18 @@ void _gcry_log_bug (const char *fmt, ...)
   grub_fatal ("gcrypt bug");
 }
 
+void _gcry_log_info (const char *fmt, ...)
+{
+  va_list args;
+
+  grub_printf ("gcrypt info: ");
+  va_start (args, fmt);
+  grub_vprintf (fmt, args);
+  va_end (args);
+  grub_refresh ();
+  grub_fatal ("gcrypt info");
+}
+
 gcry_err_code_t
 gpg_error_from_syserror (void)
 {
