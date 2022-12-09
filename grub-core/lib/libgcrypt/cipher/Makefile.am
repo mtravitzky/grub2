@@ -40,7 +40,8 @@ libcipher_la_LIBADD = $(GCRYPT_MODULES)
 libcipher_la_SOURCES = \
 cipher.c cipher-internal.h \
 cipher-cbc.c cipher-cfb.c cipher-ofb.c cipher-ctr.c cipher-aeswrap.c \
-pubkey.c md.c \
+pubkey.c pubkey-internal.h \
+md.c \
 kdf.c kdf-internal.h \
 hmac-tests.c \
 bithelp.h  \
@@ -77,7 +78,7 @@ rfc2268.c \
 camellia.c camellia.h camellia-glue.c camellia_aesni_avx_x86-64.S
 
 if ENABLE_O_FLAG_MUNGING
-o_flag_munging = sed -e 's/-O[2-9s]*/-O1/g'
+o_flag_munging = sed -e 's/-O\([2-9s][2-9s]*\)/-O1/' -e 's/-Ofast/-O1/g'
 else
 o_flag_munging = cat
 endif

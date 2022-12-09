@@ -601,6 +601,20 @@ gcry_mpi_get_flag (gcry_mpi_t a, enum gcry_mpi_flag flag)
   return _gcry_mpi_get_flag (a, flag);
 }
 
+gcry_mpi_t
+_gcry_mpi_get_const (int no)
+{
+  switch (no)
+    {
+    case 1: return _gcry_mpi_const (MPI_C_ONE);
+    case 2: return _gcry_mpi_const (MPI_C_TWO);
+    case 3: return _gcry_mpi_const (MPI_C_THREE);
+    case 4: return _gcry_mpi_const (MPI_C_FOUR);
+    case 8: return _gcry_mpi_const (MPI_C_EIGHT);
+    default: log_bug("unsupported GCRYMPI_CONST_ macro used\n");
+    }
+}
+
 gcry_error_t
 gcry_cipher_open (gcry_cipher_hd_t *handle,
                   int algo, int mode, unsigned int flags)
@@ -859,6 +873,17 @@ gcry_pk_get_param (int algo, const char *name)
       return NULL;
     }
   return _gcry_pk_get_param (algo, name);
+}
+
+gcry_error_t
+gcry_pubkey_get_sexp (gcry_sexp_t *r_sexp, int mode, gcry_ctx_t ctx)
+{
+  if (!fips_is_operational ())
+    {
+      *r_sexp = NULL;
+      return gpg_error (fips_not_operational ());
+    }
+  return gpg_error (_gcry_pubkey_get_sexp (r_sexp, mode, ctx));
 }
 
 gcry_error_t
