@@ -46,6 +46,7 @@
 #include "g10lib.h"
 #include "cipher.h"
 #include "bufhelp.h"
+#include "cipher-selftest.h"
 
 #define MAXKC			(256/32)
 #define MAXROUNDS		14
@@ -59,6 +60,12 @@
 # define ATTR_ALIGNED_16
 #endif
 
+
+/* USE_AMD64_ASM indicates whether to use AMD64 assembly code. */
+#undef USE_AMD64_ASM
+#if defined(__x86_64__) && defined(HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS)
+# define USE_AMD64_ASM 1
+#endif
 
 /* USE_PADLOCK indicates whether to compile the padlock specific
    code.  */
@@ -93,6 +100,20 @@ typedef u32           __attribute__ ((__may_alias__)) u32_a_t;
 #else
 typedef u32           u32_a_t;
 #endif
+
+
+#ifdef USE_AMD64_ASM
+/* AMD64 assembly implementations of AES */
+extern void _gcry_aes_amd64_encrypt_block(const void *keysched_enc,
+					  unsigned char *out,
+					  const unsigned char *in,
+					  int rounds);
+
+extern void _gcry_aes_amd64_decrypt_block(const void *keysched_dec,
+					  unsigned char *out,
+					  const unsigned char *in,
+					  int rounds);
+#endif /*USE_AMD64_ASM*/
 
 
 
@@ -523,6 +544,9 @@ static void
 do_encrypt_aligned (const RIJNDAEL_context *ctx,
                     unsigned char *b, const unsigned char *a)
 {
+#ifdef USE_AMD64_ASM
+  _gcry_aes_amd64_encrypt_block(ctx->keyschenc, b, a, ctx->rounds);
+#else /*!USE_AMD64_ASM*/
 #define rk (ctx->keyschenc)
   int rounds = ctx->rounds;
   int r;
@@ -604,6 +628,7 @@ do_encrypt_aligned (const RIJNDAEL_context *ctx,
   *((u32_a_t*)(b+ 8)) ^= *((u32_a_t*)rk[rounds][2]);
   *((u32_a_t*)(b+12)) ^= *((u32_a_t*)rk[rounds][3]);
 #undef rk
+#endif /*!USE_AMD64_ASM*/
 }
 
 
@@ -611,6 +636,7 @@ static void
 do_encrypt (const RIJNDAEL_context *ctx,
             unsigned char *bx, const unsigned char *ax)
 {
+#ifndef USE_AMD64_ASM
   /* BX and AX are not necessary correctly aligned.  Thus we might
      need to copy them here.  We try to align to a 16 bytes.  */
   if (((size_t)ax & 0x0f) || ((size_t)bx & 0x0f))
@@ -631,6 +657,7 @@ do_encrypt (const RIJNDAEL_context *ctx,
       memcpy (bx, b.b, 16);
     }
   else
+#endif /*!USE_AMD64_ASM*/
     {
       do_encrypt_aligned (ctx, bx, ax);
     }
@@ -817,6 +844,115 @@ do_aesni_dec_aligned (const RIJNDAEL_context *ctx,
                 : "cc", "memory");
 #undef aesdec_xmm1_xmm0
 #undef aesdeclast_xmm1_xmm0
+}
+
+
+/* Encrypt four blocks using the Intel AES-NI instructions.  Blocks are input
+ * and output through SSE registers xmm1 to xmm4.  */
+static void
+do_aesni_enc_vec4 (const RIJNDAEL_context *ctx)
+{
+#define aesenc_xmm0_xmm1      ".byte 0x66, 0x0f, 0x38, 0xdc, 0xc8\n\t"
+#define aesenc_xmm0_xmm2      ".byte 0x66, 0x0f, 0x38, 0xdc, 0xd0\n\t"
+#define aesenc_xmm0_xmm3      ".byte 0x66, 0x0f, 0x38, 0xdc, 0xd8\n\t"
+#define aesenc_xmm0_xmm4      ".byte 0x66, 0x0f, 0x38, 0xdc, 0xe0\n\t"
+#define aesenclast_xmm0_xmm1  ".byte 0x66, 0x0f, 0x38, 0xdd, 0xc8\n\t"
+#define aesenclast_xmm0_xmm2  ".byte 0x66, 0x0f, 0x38, 0xdd, 0xd0\n\t"
+#define aesenclast_xmm0_xmm3  ".byte 0x66, 0x0f, 0x38, 0xdd, 0xd8\n\t"
+#define aesenclast_xmm0_xmm4  ".byte 0x66, 0x0f, 0x38, 0xdd, 0xe0\n\t"
+  asm volatile ("movdqa (%[key]), %%xmm0\n\t"
+                "pxor   %%xmm0, %%xmm1\n\t"     /* xmm1 ^= key[0] */
+                "pxor   %%xmm0, %%xmm2\n\t"     /* xmm2 ^= key[0] */
+                "pxor   %%xmm0, %%xmm3\n\t"     /* xmm3 ^= key[0] */
+                "pxor   %%xmm0, %%xmm4\n\t"     /* xmm4 ^= key[0] */
+                "movdqa 0x10(%[key]), %%xmm0\n\t"
+                aesenc_xmm0_xmm1
+                aesenc_xmm0_xmm2
+                aesenc_xmm0_xmm3
+                aesenc_xmm0_xmm4
+                "movdqa 0x20(%[key]), %%xmm0\n\t"
+                aesenc_xmm0_xmm1
+                aesenc_xmm0_xmm2
+                aesenc_xmm0_xmm3
+                aesenc_xmm0_xmm4
+                "movdqa 0x30(%[key]), %%xmm0\n\t"
+                aesenc_xmm0_xmm1
+                aesenc_xmm0_xmm2
+                aesenc_xmm0_xmm3
+                aesenc_xmm0_xmm4
+                "movdqa 0x40(%[key]), %%xmm0\n\t"
+                aesenc_xmm0_xmm1
+                aesenc_xmm0_xmm2
+                aesenc_xmm0_xmm3
+                aesenc_xmm0_xmm4
+                "movdqa 0x50(%[key]), %%xmm0\n\t"
+                aesenc_xmm0_xmm1
+                aesenc_xmm0_xmm2
+                aesenc_xmm0_xmm3
+                aesenc_xmm0_xmm4
+                "movdqa 0x60(%[key]), %%xmm0\n\t"
+                aesenc_xmm0_xmm1
+                aesenc_xmm0_xmm2
+                aesenc_xmm0_xmm3
+                aesenc_xmm0_xmm4
+                "movdqa 0x70(%[key]), %%xmm0\n\t"
+                aesenc_xmm0_xmm1
+                aesenc_xmm0_xmm2
+                aesenc_xmm0_xmm3
+                aesenc_xmm0_xmm4
+                "movdqa 0x80(%[key]), %%xmm0\n\t"
+                aesenc_xmm0_xmm1
+                aesenc_xmm0_xmm2
+                aesenc_xmm0_xmm3
+                aesenc_xmm0_xmm4
+                "movdqa 0x90(%[key]), %%xmm0\n\t"
+                aesenc_xmm0_xmm1
+                aesenc_xmm0_xmm2
+                aesenc_xmm0_xmm3
+                aesenc_xmm0_xmm4
+                "movdqa 0xa0(%[key]), %%xmm0\n\t"
+                "cmpl $10, %[rounds]\n\t"
+                "jz .Ldeclast%=\n\t"
+                aesenc_xmm0_xmm1
+                aesenc_xmm0_xmm2
+                aesenc_xmm0_xmm3
+                aesenc_xmm0_xmm4
+                "movdqa 0xb0(%[key]), %%xmm0\n\t"
+                aesenc_xmm0_xmm1
+                aesenc_xmm0_xmm2
+                aesenc_xmm0_xmm3
+                aesenc_xmm0_xmm4
+                "movdqa 0xc0(%[key]), %%xmm0\n\t"
+                "cmpl $12, %[rounds]\n\t"
+                "jz .Ldeclast%=\n\t"
+                aesenc_xmm0_xmm1
+                aesenc_xmm0_xmm2
+                aesenc_xmm0_xmm3
+                aesenc_xmm0_xmm4
+                "movdqa 0xd0(%[key]), %%xmm0\n\t"
+                aesenc_xmm0_xmm1
+                aesenc_xmm0_xmm2
+                aesenc_xmm0_xmm3
+                aesenc_xmm0_xmm4
+                "movdqa 0xe0(%[key]), %%xmm0\n"
+
+                ".Ldeclast%=:\n\t"
+                aesenclast_xmm0_xmm1
+                aesenclast_xmm0_xmm2
+                aesenclast_xmm0_xmm3
+                aesenclast_xmm0_xmm4
+                : /* no output */
+                : [key] "r" (ctx->keyschenc),
+                  [rounds] "r" (ctx->rounds)
+                : "cc", "memory");
+#undef aesenc_xmm0_xmm1
+#undef aesenc_xmm0_xmm2
+#undef aesenc_xmm0_xmm3
+#undef aesenc_xmm0_xmm4
+#undef aesenclast_xmm0_xmm1
+#undef aesenclast_xmm0_xmm2
+#undef aesenclast_xmm0_xmm3
+#undef aesenclast_xmm0_xmm4
 }
 
 
@@ -1529,6 +1665,9 @@ static void
 do_decrypt_aligned (RIJNDAEL_context *ctx,
                     unsigned char *b, const unsigned char *a)
 {
+#ifdef USE_AMD64_ASM
+  _gcry_aes_amd64_decrypt_block(ctx->keyschdec, b, a, ctx->rounds);
+#else /*!USE_AMD64_ASM*/
 #define rk  (ctx->keyschdec)
   int rounds = ctx->rounds;
   int r;
@@ -1611,6 +1750,7 @@ do_decrypt_aligned (RIJNDAEL_context *ctx,
   *((u32_a_t*)(b+ 8)) ^= *((u32_a_t*)rk[0][2]);
   *((u32_a_t*)(b+12)) ^= *((u32_a_t*)rk[0][3]);
 #undef rk
+#endif /*!USE_AMD64_ASM*/
 }
 
 
@@ -1625,6 +1765,7 @@ do_decrypt (RIJNDAEL_context *ctx, byte *bx, const byte *ax)
       ctx->decryption_prepared = 1;
     }
 
+#ifndef USE_AMD64_ASM
   /* BX and AX are not necessary correctly aligned.  Thus we might
      need to copy them here.  We try to align to a 16 bytes. */
   if (((size_t)ax & 0x0f) || ((size_t)bx & 0x0f))
@@ -1645,6 +1786,7 @@ do_decrypt (RIJNDAEL_context *ctx, byte *bx, const byte *ax)
       memcpy (bx, b.b, 16);
     }
   else
+#endif /*!USE_AMD64_ASM*/
     {
       do_decrypt_aligned (ctx, bx, ax);
     }
@@ -1684,7 +1826,7 @@ rijndael_decrypt (void *context, byte *b, const byte *a)
 
 
 /* Bulk decryption of complete blocks in CFB mode.  Caller needs to
-   make sure that IV is aligned on an unisgned lonhg boundary.  This
+   make sure that IV is aligned on an unsigned long boundary.  This
    function is only intended for the bulk encryption feature of
    cipher.c. */
 void
@@ -1715,6 +1857,50 @@ _gcry_aes_cfb_dec (void *context, unsigned char *iv,
   else if (ctx->use_aesni)
     {
       aesni_prepare ();
+
+      /* CFB decryption can be parallelized */
+      for ( ;nblocks >= 4; nblocks -= 4)
+        {
+          asm volatile
+            ("movdqu (%[iv]),        %%xmm1\n\t" /* load input blocks */
+             "movdqu 0*16(%[inbuf]), %%xmm2\n\t"
+             "movdqu 1*16(%[inbuf]), %%xmm3\n\t"
+             "movdqu 2*16(%[inbuf]), %%xmm4\n\t"
+
+             "movdqu 3*16(%[inbuf]), %%xmm0\n\t" /* update IV */
+             "movdqu %%xmm0,         (%[iv])\n\t"
+             : /* No output */
+             : [inbuf] "r" (inbuf), [iv] "r" (iv)
+             : "memory");
+
+          do_aesni_enc_vec4 (ctx);
+
+          asm volatile
+            ("movdqu 0*16(%[inbuf]), %%xmm5\n\t"
+             "pxor %%xmm5, %%xmm1\n\t"
+             "movdqu %%xmm1, 0*16(%[outbuf])\n\t"
+
+             "movdqu 1*16(%[inbuf]), %%xmm5\n\t"
+             "pxor %%xmm5, %%xmm2\n\t"
+             "movdqu %%xmm2, 1*16(%[outbuf])\n\t"
+
+             "movdqu 2*16(%[inbuf]), %%xmm5\n\t"
+             "pxor %%xmm5, %%xmm3\n\t"
+             "movdqu %%xmm3, 2*16(%[outbuf])\n\t"
+
+             "movdqu 3*16(%[inbuf]), %%xmm5\n\t"
+             "pxor %%xmm5, %%xmm4\n\t"
+             "movdqu %%xmm4, 3*16(%[outbuf])\n\t"
+
+             : /* No output */
+             : [inbuf] "r" (inbuf),
+               [outbuf] "r" (outbuf)
+             : "memory");
+
+          outbuf += 4*BLOCKSIZE;
+          inbuf  += 4*BLOCKSIZE;
+        }
+
       for ( ;nblocks; nblocks-- )
         {
           do_aesni_cfb (ctx, 1, iv, outbuf, inbuf);
@@ -1722,6 +1908,7 @@ _gcry_aes_cfb_dec (void *context, unsigned char *iv,
           inbuf  += BLOCKSIZE;
         }
       aesni_cleanup ();
+      aesni_cleanup_2_5 ();
     }
 #endif /*USE_AESNI*/
   else
@@ -2009,93 +2196,43 @@ selftest_basic_256 (void)
 static const char*
 selftest_ctr_128 (void)
 {
-  RIJNDAEL_context ctx ATTR_ALIGNED_16;
-  unsigned char plaintext[7*16] ATTR_ALIGNED_16;
-  unsigned char ciphertext[7*16] ATTR_ALIGNED_16;
-  unsigned char plaintext2[7*16] ATTR_ALIGNED_16;
-  unsigned char iv[16] ATTR_ALIGNED_16;
-  unsigned char iv2[16] ATTR_ALIGNED_16;
-  int i, j, diff;
+  const int nblocks = 8+1;
+  const int blocksize = BLOCKSIZE;
+  const int context_size = sizeof(RIJNDAEL_context);
 
-  static const unsigned char key[16] ATTR_ALIGNED_16 = {
-      0x06,0x9A,0x00,0x7F,0xC7,0x6A,0x45,0x9F,
-      0x98,0xBA,0xF9,0x17,0xFE,0xDF,0x95,0x21
-    };
-  static char error_str[128];
+  return _gcry_selftest_helper_ctr("AES", &rijndael_setkey,
+           &rijndael_encrypt, &_gcry_aes_ctr_enc, nblocks, blocksize,
+	   context_size);
+}
 
-  rijndael_setkey (&ctx, key, sizeof (key));
 
-  /* Test single block code path */
-  memset(iv, 0xff, sizeof(iv));
-  for (i = 0; i < 16; i++)
-    plaintext[i] = i;
+/* Run the self-tests for AES-CBC-128, tests bulk CBC decryption.
+   Returns NULL on success. */
+static const char*
+selftest_cbc_128 (void)
+{
+  const int nblocks = 8+2;
+  const int blocksize = BLOCKSIZE;
+  const int context_size = sizeof(RIJNDAEL_context);
 
-  /* CTR manually.  */
-  rijndael_encrypt (&ctx, ciphertext, iv);
-  for (i = 0; i < 16; i++)
-    ciphertext[i] ^= plaintext[i];
-  for (i = 16; i > 0; i--)
-    {
-      iv[i-1]++;
-      if (iv[i-1])
-        break;
-    }
+  return _gcry_selftest_helper_cbc("AES", &rijndael_setkey,
+           &rijndael_encrypt, &_gcry_aes_cbc_dec, nblocks, blocksize,
+	   context_size);
+}
 
-  memset(iv2, 0xff, sizeof(iv2));
-  _gcry_aes_ctr_enc (&ctx, iv2, plaintext2, ciphertext, 1);
 
-  if (memcmp(plaintext2, plaintext, 16))
-    return "AES-128-CTR test failed (plaintext mismatch)";
+/* Run the self-tests for AES-CFB-128, tests bulk CFB decryption.
+   Returns NULL on success. */
+static const char*
+selftest_cfb_128 (void)
+{
+  const int nblocks = 8+2;
+  const int blocksize = BLOCKSIZE;
+  const int context_size = sizeof(RIJNDAEL_context);
 
-  if (memcmp(iv2, iv, 16))
-    return "AES-128-CTR test failed (IV mismatch)";
-
-  /* Test parallelized code paths */
-  for (diff = 0; diff < 7; diff++) {
-    memset(iv, 0xff, sizeof(iv));
-    iv[15] -= diff;
-
-    for (i = 0; i < sizeof(plaintext); i++)
-      plaintext[i] = i;
-
-    /* Create CTR ciphertext manually.  */
-    for (i = 0; i < sizeof(plaintext); i+=16)
-      {
-        rijndael_encrypt (&ctx, &ciphertext[i], iv);
-        for (j = 0; j < 16; j++)
-          ciphertext[i+j] ^= plaintext[i+j];
-        for (j = 16; j > 0; j--)
-          {
-            iv[j-1]++;
-            if (iv[j-1])
-              break;
-          }
-      }
-
-    /* Decrypt using bulk CTR and compare result.  */
-    memset(iv2, 0xff, sizeof(iv2));
-    iv2[15] -= diff;
-
-    _gcry_aes_ctr_enc (&ctx, iv2, plaintext2, ciphertext,
-                       sizeof(ciphertext) / BLOCKSIZE);
-
-    if (memcmp(plaintext2, plaintext, sizeof(plaintext)))
-      {
-        snprintf(error_str, sizeof(error_str),
-                 "AES-128-CTR test failed (plaintext mismatch, diff: %d)",
-                 diff);
-        return error_str;
-      }
-    if (memcmp(iv2, iv, sizeof(iv)))
-      {
-        snprintf(error_str, sizeof(error_str),
-                 "AES-128-CTR test failed (IV mismatch, diff: %d)",
-                 diff);
-        return error_str;
-      }
-  }
-
-  return NULL;
+  return _gcry_selftest_helper_cfb("AES", &rijndael_setkey,
+           &rijndael_encrypt, &_gcry_aes_cfb_dec, nblocks, blocksize,
+	   context_size);
 }
 
 
@@ -2112,6 +2249,12 @@ selftest (void)
     return r;
 
   if ( (r = selftest_ctr_128 ()) )
+    return r;
+
+  if ( (r = selftest_cbc_128 ()) )
+    return r;
+
+  if ( (r = selftest_cfb_128 ()) )
     return r;
 
   return r;

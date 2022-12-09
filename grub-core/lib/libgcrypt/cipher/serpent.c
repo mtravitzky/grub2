@@ -28,6 +28,24 @@
 #include "g10lib.h"
 #include "cipher.h"
 #include "bithelp.h"
+#include "bufhelp.h"
+#include "cipher-selftest.h"
+
+
+/* USE_SSE2 indicates whether to compile with AMD64 SSE2 code. */
+#undef USE_SSE2
+#if defined(__x86_64__) && defined(HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS)
+# define USE_SSE2 1
+#endif
+
+/* USE_AVX2 indicates whether to compile with AMD64 AVX2 code. */
+#undef USE_AVX2
+#if defined(__x86_64__) && defined(HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS)
+# if defined(ENABLE_AVX2_SUPPORT)
+#  define USE_AVX2 1
+# endif
+#endif
+
 
 /* Number of rounds per Serpent encrypt/decrypt operation.  */
 #define ROUNDS 32
@@ -49,7 +67,52 @@ typedef u32 serpent_subkeys_t[ROUNDS + 1][4];
 typedef struct serpent_context
 {
   serpent_subkeys_t keys;	/* Generated subkeys.  */
+
+#ifdef USE_AVX2
+  int use_avx2;
+#endif
 } serpent_context_t;
+
+
+#ifdef USE_SSE2
+/* Assembler implementations of Serpent using SSE2.  Process 8 block in
+   parallel.
+ */
+extern void _gcry_serpent_sse2_ctr_enc(serpent_context_t *ctx,
+				       unsigned char *out,
+				       const unsigned char *in,
+				       unsigned char *ctr);
+
+extern void _gcry_serpent_sse2_cbc_dec(serpent_context_t *ctx,
+				       unsigned char *out,
+				       const unsigned char *in,
+				       unsigned char *iv);
+
+extern void _gcry_serpent_sse2_cfb_dec(serpent_context_t *ctx,
+				       unsigned char *out,
+				       const unsigned char *in,
+				       unsigned char *iv);
+#endif
+
+#ifdef USE_AVX2
+/* Assembler implementations of Serpent using SSE2.  Process 16 block in
+   parallel.
+ */
+extern void _gcry_serpent_avx2_ctr_enc(serpent_context_t *ctx,
+				       unsigned char *out,
+				       const unsigned char *in,
+				       unsigned char *ctr);
+
+extern void _gcry_serpent_avx2_cbc_dec(serpent_context_t *ctx,
+				       unsigned char *out,
+				       const unsigned char *in,
+				       unsigned char *iv);
+
+extern void _gcry_serpent_avx2_cfb_dec(serpent_context_t *ctx,
+				       unsigned char *out,
+				       const unsigned char *in,
+				       unsigned char *iv);
+#endif
 
 
 /* A prototype.  */
@@ -61,403 +124,303 @@ static const char *serpent_test (void);
    | (((x) & 0xff000000) >> 24) | (((x) & 0x00ff0000) >>  8) \
    | (((x) & 0x0000ff00) <<  8) | (((x) & 0x000000ff) << 24))
 
-/* These are the S-Boxes of Serpent.  They are copied from Serpents
-   reference implementation (the optimized one, contained in
-   `floppy2') and are therefore:
+/*
+ * These are the S-Boxes of Serpent from following research paper.
+ *
+ *  D. A. Osvik, “Speeding up Serpent,” in Third AES Candidate Conference,
+ *   (New York, New York, USA), p. 317–329, National Institute of Standards and
+ *   Technology, 2000.
+ *
+ * Paper is also available at: http://www.ii.uib.no/~osvik/pub/aes3.pdf
+ *
+ */
 
-     Copyright (C) 1998 Ross Anderson, Eli Biham, Lars Knudsen.
-
-  To quote the Serpent homepage
-  (http://www.cl.cam.ac.uk/~rja14/serpent.html):
-
-  "Serpent is now completely in the public domain, and we impose no
-   restrictions on its use.  This was announced on the 21st August at
-   the First AES Candidate Conference. The optimised implementations
-   in the submission package are now under the GNU PUBLIC LICENSE
-   (GPL), although some comments in the code still say otherwise. You
-   are welcome to use Serpent for any application."  */
-
-#define SBOX0(a, b, c, d, w, x, y, z) \
+#define SBOX0(r0, r1, r2, r3, w, x, y, z) \
   { \
-    u32 t02, t03, t05, t06, t07, t08, t09; \
-    u32 t11, t12, t13, t14, t15, t17, t01; \
-    t01 = b   ^ c  ; \
-    t02 = a   | d  ; \
-    t03 = a   ^ b  ; \
-    z   = t02 ^ t01; \
-    t05 = c   | z  ; \
-    t06 = a   ^ d  ; \
-    t07 = b   | c  ; \
-    t08 = d   & t05; \
-    t09 = t03 & t07; \
-    y   = t09 ^ t08; \
-    t11 = t09 & y  ; \
-    t12 = c   ^ d  ; \
-    t13 = t07 ^ t11; \
-    t14 = b   & t06; \
-    t15 = t06 ^ t13; \
-    w   =     ~ t15; \
-    t17 = w   ^ t14; \
-    x   = t12 ^ t17; \
+    u32 r4; \
+    \
+    r3 ^= r0; r4 =  r1; \
+    r1 &= r3; r4 ^= r2; \
+    r1 ^= r0; r0 |= r3; \
+    r0 ^= r4; r4 ^= r3; \
+    r3 ^= r2; r2 |= r1; \
+    r2 ^= r4; r4 = ~r4; \
+    r4 |= r1; r1 ^= r3; \
+    r1 ^= r4; r3 |= r0; \
+    r1 ^= r3; r4 ^= r3; \
+    \
+    w = r1; x = r4; y = r2; z = r0; \
   }
 
-#define SBOX0_INVERSE(a, b, c, d, w, x, y, z) \
+#define SBOX0_INVERSE(r0, r1, r2, r3, w, x, y, z) \
   { \
-    u32 t02, t03, t04, t05, t06, t08, t09, t10; \
-    u32 t12, t13, t14, t15, t17, t18, t01; \
-    t01 = c   ^ d  ; \
-    t02 = a   | b  ; \
-    t03 = b   | c  ; \
-    t04 = c   & t01; \
-    t05 = t02 ^ t01; \
-    t06 = a   | t04; \
-    y   =     ~ t05; \
-    t08 = b   ^ d  ; \
-    t09 = t03 & t08; \
-    t10 = d   | y  ; \
-    x   = t09 ^ t06; \
-    t12 = a   | t05; \
-    t13 = x   ^ t12; \
-    t14 = t03 ^ t10; \
-    t15 = a   ^ c  ; \
-    z   = t14 ^ t13; \
-    t17 = t05 & t13; \
-    t18 = t14 | t17; \
-    w   = t15 ^ t18; \
+    u32 r4; \
+    \
+    r2 = ~r2; r4 =  r1; \
+    r1 |= r0; r4 = ~r4; \
+    r1 ^= r2; r2 |= r4; \
+    r1 ^= r3; r0 ^= r4; \
+    r2 ^= r0; r0 &= r3; \
+    r4 ^= r0; r0 |= r1; \
+    r0 ^= r2; r3 ^= r4; \
+    r2 ^= r1; r3 ^= r0; \
+    r3 ^= r1; \
+    r2 &= r3; \
+    r4 ^= r2; \
+    \
+    w = r0; x = r4; y = r1; z = r3; \
   }
 
-#define SBOX1(a, b, c, d, w, x, y, z) \
+#define SBOX1(r0, r1, r2, r3, w, x, y, z) \
   { \
-    u32 t02, t03, t04, t05, t06, t07, t08; \
-    u32 t10, t11, t12, t13, t16, t17, t01; \
-    t01 = a   | d  ; \
-    t02 = c   ^ d  ; \
-    t03 =     ~ b  ; \
-    t04 = a   ^ c  ; \
-    t05 = a   | t03; \
-    t06 = d   & t04; \
-    t07 = t01 & t02; \
-    t08 = b   | t06; \
-    y   = t02 ^ t05; \
-    t10 = t07 ^ t08; \
-    t11 = t01 ^ t10; \
-    t12 = y   ^ t11; \
-    t13 = b   & d  ; \
-    z   =     ~ t10; \
-    x   = t13 ^ t12; \
-    t16 = t10 | x  ; \
-    t17 = t05 & t16; \
-    w   = c   ^ t17; \
+    u32 r4; \
+    \
+    r0 = ~r0; r2 = ~r2; \
+    r4 =  r0; r0 &= r1; \
+    r2 ^= r0; r0 |= r3; \
+    r3 ^= r2; r1 ^= r0; \
+    r0 ^= r4; r4 |= r1; \
+    r1 ^= r3; r2 |= r0; \
+    r2 &= r4; r0 ^= r1; \
+    r1 &= r2; \
+    r1 ^= r0; r0 &= r2; \
+    r0 ^= r4; \
+    \
+    w = r2; x = r0; y = r3; z = r1; \
   }
 
-#define SBOX1_INVERSE(a, b, c, d, w, x, y, z) \
+#define SBOX1_INVERSE(r0, r1, r2, r3, w, x, y, z) \
   { \
-    u32 t02, t03, t04, t05, t06, t07, t08; \
-    u32 t09, t10, t11, t14, t15, t17, t01; \
-    t01 = a   ^ b  ; \
-    t02 = b   | d  ; \
-    t03 = a   & c  ; \
-    t04 = c   ^ t02; \
-    t05 = a   | t04; \
-    t06 = t01 & t05; \
-    t07 = d   | t03; \
-    t08 = b   ^ t06; \
-    t09 = t07 ^ t06; \
-    t10 = t04 | t03; \
-    t11 = d   & t08; \
-    y   =     ~ t09; \
-    x   = t10 ^ t11; \
-    t14 = a   | y  ; \
-    t15 = t06 ^ x  ; \
-    z   = t01 ^ t04; \
-    t17 = c   ^ t15; \
-    w   = t14 ^ t17; \
+    u32 r4; \
+    \
+    r4 =  r1; r1 ^= r3; \
+    r3 &= r1; r4 ^= r2; \
+    r3 ^= r0; r0 |= r1; \
+    r2 ^= r3; r0 ^= r4; \
+    r0 |= r2; r1 ^= r3; \
+    r0 ^= r1; r1 |= r3; \
+    r1 ^= r0; r4 = ~r4; \
+    r4 ^= r1; r1 |= r0; \
+    r1 ^= r0; \
+    r1 |= r4; \
+    r3 ^= r1; \
+    \
+    w = r4; x = r0; y = r3; z = r2; \
   }
 
-#define SBOX2(a, b, c, d, w, x, y, z) \
+#define SBOX2(r0, r1, r2, r3, w, x, y, z) \
   { \
-    u32 t02, t03, t05, t06, t07, t08; \
-    u32 t09, t10, t12, t13, t14, t01; \
-    t01 = a   | c  ; \
-    t02 = a   ^ b  ; \
-    t03 = d   ^ t01; \
-    w   = t02 ^ t03; \
-    t05 = c   ^ w  ; \
-    t06 = b   ^ t05; \
-    t07 = b   | t05; \
-    t08 = t01 & t06; \
-    t09 = t03 ^ t07; \
-    t10 = t02 | t09; \
-    x   = t10 ^ t08; \
-    t12 = a   | d  ; \
-    t13 = t09 ^ x  ; \
-    t14 = b   ^ t13; \
-    z   =     ~ t09; \
-    y   = t12 ^ t14; \
+    u32 r4; \
+    \
+    r4 =  r0; r0 &= r2; \
+    r0 ^= r3; r2 ^= r1; \
+    r2 ^= r0; r3 |= r4; \
+    r3 ^= r1; r4 ^= r2; \
+    r1 =  r3; r3 |= r4; \
+    r3 ^= r0; r0 &= r1; \
+    r4 ^= r0; r1 ^= r3; \
+    r1 ^= r4; r4 = ~r4; \
+    \
+    w = r2; x = r3; y = r1; z = r4; \
   }
 
-#define SBOX2_INVERSE(a, b, c, d, w, x, y, z) \
+#define SBOX2_INVERSE(r0, r1, r2, r3, w, x, y, z) \
   { \
-    u32 t02, t03, t04, t06, t07, t08, t09; \
-    u32 t10, t11, t12, t15, t16, t17, t01; \
-    t01 = a   ^ d  ; \
-    t02 = c   ^ d  ; \
-    t03 = a   & c  ; \
-    t04 = b   | t02; \
-    w   = t01 ^ t04; \
-    t06 = a   | c  ; \
-    t07 = d   | w  ; \
-    t08 =     ~ d  ; \
-    t09 = b   & t06; \
-    t10 = t08 | t03; \
-    t11 = b   & t07; \
-    t12 = t06 & t02; \
-    z   = t09 ^ t10; \
-    x   = t12 ^ t11; \
-    t15 = c   & z  ; \
-    t16 = w   ^ x  ; \
-    t17 = t10 ^ t15; \
-    y   = t16 ^ t17; \
+    u32 r4; \
+    \
+    r2 ^= r3; r3 ^= r0; \
+    r4 =  r3; r3 &= r2; \
+    r3 ^= r1; r1 |= r2; \
+    r1 ^= r4; r4 &= r3; \
+    r2 ^= r3; r4 &= r0; \
+    r4 ^= r2; r2 &= r1; \
+    r2 |= r0; r3 = ~r3; \
+    r2 ^= r3; r0 ^= r3; \
+    r0 &= r1; r3 ^= r4; \
+    r3 ^= r0; \
+    \
+    w = r1; x = r4; y = r2; z = r3; \
   }
 
-#define SBOX3(a, b, c, d, w, x, y, z) \
+#define SBOX3(r0, r1, r2, r3, w, x, y, z) \
   { \
-    u32 t02, t03, t04, t05, t06, t07, t08; \
-    u32 t09, t10, t11, t13, t14, t15, t01; \
-    t01 = a   ^ c  ; \
-    t02 = a   | d  ; \
-    t03 = a   & d  ; \
-    t04 = t01 & t02; \
-    t05 = b   | t03; \
-    t06 = a   & b  ; \
-    t07 = d   ^ t04; \
-    t08 = c   | t06; \
-    t09 = b   ^ t07; \
-    t10 = d   & t05; \
-    t11 = t02 ^ t10; \
-    z   = t08 ^ t09; \
-    t13 = d   | z  ; \
-    t14 = a   | t07; \
-    t15 = b   & t13; \
-    y   = t08 ^ t11; \
-    w   = t14 ^ t15; \
-    x   = t05 ^ t04; \
+    u32 r4; \
+    \
+    r4 =  r0; r0 |= r3; \
+    r3 ^= r1; r1 &= r4; \
+    r4 ^= r2; r2 ^= r3; \
+    r3 &= r0; r4 |= r1; \
+    r3 ^= r4; r0 ^= r1; \
+    r4 &= r0; r1 ^= r3; \
+    r4 ^= r2; r1 |= r0; \
+    r1 ^= r2; r0 ^= r3; \
+    r2 =  r1; r1 |= r3; \
+    r1 ^= r0; \
+    \
+    w = r1; x = r2; y = r3; z = r4; \
   }
 
-#define SBOX3_INVERSE(a, b, c, d, w, x, y, z) \
+#define SBOX3_INVERSE(r0, r1, r2, r3, w, x, y, z) \
   { \
-    u32 t02, t03, t04, t05, t06, t07, t09; \
-    u32 t11, t12, t13, t14, t16, t01; \
-    t01 = c   | d  ; \
-    t02 = a   | d  ; \
-    t03 = c   ^ t02; \
-    t04 = b   ^ t02; \
-    t05 = a   ^ d  ; \
-    t06 = t04 & t03; \
-    t07 = b   & t01; \
-    y   = t05 ^ t06; \
-    t09 = a   ^ t03; \
-    w   = t07 ^ t03; \
-    t11 = w   | t05; \
-    t12 = t09 & t11; \
-    t13 = a   & y  ; \
-    t14 = t01 ^ t05; \
-    x   = b   ^ t12; \
-    t16 = b   | t13; \
-    z   = t14 ^ t16; \
+    u32 r4; \
+    \
+    r4 =  r2; r2 ^= r1; \
+    r0 ^= r2; r4 &= r2; \
+    r4 ^= r0; r0 &= r1; \
+    r1 ^= r3; r3 |= r4; \
+    r2 ^= r3; r0 ^= r3; \
+    r1 ^= r4; r3 &= r2; \
+    r3 ^= r1; r1 ^= r0; \
+    r1 |= r2; r0 ^= r3; \
+    r1 ^= r4; \
+    r0 ^= r1; \
+    \
+    w = r2; x = r1; y = r3; z = r0; \
   }
 
-#define SBOX4(a, b, c, d, w, x, y, z) \
+#define SBOX4(r0, r1, r2, r3, w, x, y, z) \
   { \
-    u32 t02, t03, t04, t05, t06, t08, t09; \
-    u32 t10, t11, t12, t13, t14, t15, t16, t01; \
-    t01 = a   | b  ; \
-    t02 = b   | c  ; \
-    t03 = a   ^ t02; \
-    t04 = b   ^ d  ; \
-    t05 = d   | t03; \
-    t06 = d   & t01; \
-    z   = t03 ^ t06; \
-    t08 = z   & t04; \
-    t09 = t04 & t05; \
-    t10 = c   ^ t06; \
-    t11 = b   & c  ; \
-    t12 = t04 ^ t08; \
-    t13 = t11 | t03; \
-    t14 = t10 ^ t09; \
-    t15 = a   & t05; \
-    t16 = t11 | t12; \
-    y   = t13 ^ t08; \
-    x   = t15 ^ t16; \
-    w   =     ~ t14; \
+    u32 r4; \
+    \
+    r1 ^= r3; r3 = ~r3; \
+    r2 ^= r3; r3 ^= r0; \
+    r4 =  r1; r1 &= r3; \
+    r1 ^= r2; r4 ^= r3; \
+    r0 ^= r4; r2 &= r4; \
+    r2 ^= r0; r0 &= r1; \
+    r3 ^= r0; r4 |= r1; \
+    r4 ^= r0; r0 |= r3; \
+    r0 ^= r2; r2 &= r3; \
+    r0 = ~r0; r4 ^= r2; \
+    \
+    w = r1; x = r4; y = r0; z = r3; \
   }
 
-#define SBOX4_INVERSE(a, b, c, d, w, x, y, z) \
+#define SBOX4_INVERSE(r0, r1, r2, r3, w, x, y, z) \
   { \
-    u32 t02, t03, t04, t05, t06, t07, t09; \
-    u32 t10, t11, t12, t13, t15, t01; \
-    t01 = b   | d  ; \
-    t02 = c   | d  ; \
-    t03 = a   & t01; \
-    t04 = b   ^ t02; \
-    t05 = c   ^ d  ; \
-    t06 =     ~ t03; \
-    t07 = a   & t04; \
-    x   = t05 ^ t07; \
-    t09 = x   | t06; \
-    t10 = a   ^ t07; \
-    t11 = t01 ^ t09; \
-    t12 = d   ^ t04; \
-    t13 = c   | t10; \
-    z   = t03 ^ t12; \
-    t15 = a   ^ t04; \
-    y   = t11 ^ t13; \
-    w   = t15 ^ t09; \
+    u32 r4; \
+    \
+    r4 =  r2; r2 &= r3; \
+    r2 ^= r1; r1 |= r3; \
+    r1 &= r0; r4 ^= r2; \
+    r4 ^= r1; r1 &= r2; \
+    r0 = ~r0; r3 ^= r4; \
+    r1 ^= r3; r3 &= r0; \
+    r3 ^= r2; r0 ^= r1; \
+    r2 &= r0; r3 ^= r0; \
+    r2 ^= r4; \
+    r2 |= r3; r3 ^= r0; \
+    r2 ^= r1; \
+    \
+    w = r0; x = r3; y = r2; z = r4; \
   }
 
-#define SBOX5(a, b, c, d, w, x, y, z) \
+#define SBOX5(r0, r1, r2, r3, w, x, y, z) \
   { \
-    u32 t02, t03, t04, t05, t07, t08, t09; \
-    u32 t10, t11, t12, t13, t14, t01; \
-    t01 = b   ^ d  ; \
-    t02 = b   | d  ; \
-    t03 = a   & t01; \
-    t04 = c   ^ t02; \
-    t05 = t03 ^ t04; \
-    w   =     ~ t05; \
-    t07 = a   ^ t01; \
-    t08 = d   | w  ; \
-    t09 = b   | t05; \
-    t10 = d   ^ t08; \
-    t11 = b   | t07; \
-    t12 = t03 | w  ; \
-    t13 = t07 | t10; \
-    t14 = t01 ^ t11; \
-    y   = t09 ^ t13; \
-    x   = t07 ^ t08; \
-    z   = t12 ^ t14; \
+    u32 r4; \
+    \
+    r0 ^= r1; r1 ^= r3; \
+    r3 = ~r3; r4 =  r1; \
+    r1 &= r0; r2 ^= r3; \
+    r1 ^= r2; r2 |= r4; \
+    r4 ^= r3; r3 &= r1; \
+    r3 ^= r0; r4 ^= r1; \
+    r4 ^= r2; r2 ^= r0; \
+    r0 &= r3; r2 = ~r2; \
+    r0 ^= r4; r4 |= r3; \
+    r2 ^= r4; \
+    \
+    w = r1; x = r3; y = r0; z = r2; \
   }
 
-#define SBOX5_INVERSE(a, b, c, d, w, x, y, z) \
+#define SBOX5_INVERSE(r0, r1, r2, r3, w, x, y, z) \
   { \
-    u32 t02, t03, t04, t05, t07, t08, t09; \
-    u32 t10, t12, t13, t15, t16, t01; \
-    t01 = a   & d  ; \
-    t02 = c   ^ t01; \
-    t03 = a   ^ d  ; \
-    t04 = b   & t02; \
-    t05 = a   & c  ; \
-    w   = t03 ^ t04; \
-    t07 = a   & w  ; \
-    t08 = t01 ^ w  ; \
-    t09 = b   | t05; \
-    t10 =     ~ b  ; \
-    x   = t08 ^ t09; \
-    t12 = t10 | t07; \
-    t13 = w   | x  ; \
-    z   = t02 ^ t12; \
-    t15 = t02 ^ t13; \
-    t16 = b   ^ d  ; \
-    y   = t16 ^ t15; \
+    u32 r4; \
+    \
+    r1 = ~r1; r4 =  r3; \
+    r2 ^= r1; r3 |= r0; \
+    r3 ^= r2; r2 |= r1; \
+    r2 &= r0; r4 ^= r3; \
+    r2 ^= r4; r4 |= r0; \
+    r4 ^= r1; r1 &= r2; \
+    r1 ^= r3; r4 ^= r2; \
+    r3 &= r4; r4 ^= r1; \
+    r3 ^= r4; r4 = ~r4; \
+    r3 ^= r0; \
+    \
+    w = r1; x = r4; y = r3; z = r2; \
   }
 
-#define SBOX6(a, b, c, d, w, x, y, z) \
+#define SBOX6(r0, r1, r2, r3, w, x, y, z) \
   { \
-    u32 t02, t03, t04, t05, t07, t08, t09, t10; \
-    u32 t11, t12, t13, t15, t17, t18, t01; \
-    t01 = a   & d  ; \
-    t02 = b   ^ c  ; \
-    t03 = a   ^ d  ; \
-    t04 = t01 ^ t02; \
-    t05 = b   | c  ; \
-    x   =     ~ t04; \
-    t07 = t03 & t05; \
-    t08 = b   & x  ; \
-    t09 = a   | c  ; \
-    t10 = t07 ^ t08; \
-    t11 = b   | d  ; \
-    t12 = c   ^ t11; \
-    t13 = t09 ^ t10; \
-    y   =     ~ t13; \
-    t15 = x   & t03; \
-    z   = t12 ^ t07; \
-    t17 = a   ^ b  ; \
-    t18 = y   ^ t15; \
-    w   = t17 ^ t18; \
+    u32 r4; \
+    \
+    r2 = ~r2; r4 =  r3; \
+    r3 &= r0; r0 ^= r4; \
+    r3 ^= r2; r2 |= r4; \
+    r1 ^= r3; r2 ^= r0; \
+    r0 |= r1; r2 ^= r1; \
+    r4 ^= r0; r0 |= r3; \
+    r0 ^= r2; r4 ^= r3; \
+    r4 ^= r0; r3 = ~r3; \
+    r2 &= r4; \
+    r2 ^= r3; \
+    \
+    w = r0; x = r1; y = r4; z = r2; \
   }
 
-#define SBOX6_INVERSE(a, b, c, d, w, x, y, z) \
+#define SBOX6_INVERSE(r0, r1, r2, r3, w, x, y, z) \
   { \
-    u32 t02, t03, t04, t05, t06, t07, t08, t09; \
-    u32 t12, t13, t14, t15, t16, t17, t01; \
-    t01 = a   ^ c  ; \
-    t02 =     ~ c  ; \
-    t03 = b   & t01; \
-    t04 = b   | t02; \
-    t05 = d   | t03; \
-    t06 = b   ^ d  ; \
-    t07 = a   & t04; \
-    t08 = a   | t02; \
-    t09 = t07 ^ t05; \
-    x   = t06 ^ t08; \
-    w   =     ~ t09; \
-    t12 = b   & w  ; \
-    t13 = t01 & t05; \
-    t14 = t01 ^ t12; \
-    t15 = t07 ^ t13; \
-    t16 = d   | t02; \
-    t17 = a   ^ x  ; \
-    z   = t17 ^ t15; \
-    y   = t16 ^ t14; \
+    u32 r4; \
+    \
+    r0 ^= r2; r4 =  r2; \
+    r2 &= r0; r4 ^= r3; \
+    r2 = ~r2; r3 ^= r1; \
+    r2 ^= r3; r4 |= r0; \
+    r0 ^= r2; r3 ^= r4; \
+    r4 ^= r1; r1 &= r3; \
+    r1 ^= r0; r0 ^= r3; \
+    r0 |= r2; r3 ^= r1; \
+    r4 ^= r0; \
+    \
+    w = r1; x = r2; y = r4; z = r3; \
   }
 
-#define SBOX7(a, b, c, d, w, x, y, z) \
+#define SBOX7(r0, r1, r2, r3, w, x, y, z) \
   { \
-    u32 t02, t03, t04, t05, t06, t08, t09, t10; \
-    u32 t11, t13, t14, t15, t16, t17, t01; \
-    t01 = a   & c  ; \
-    t02 =     ~ d  ; \
-    t03 = a   & t02; \
-    t04 = b   | t01; \
-    t05 = a   & b  ; \
-    t06 = c   ^ t04; \
-    z   = t03 ^ t06; \
-    t08 = c   | z  ; \
-    t09 = d   | t05; \
-    t10 = a   ^ t08; \
-    t11 = t04 & z  ; \
-    x   = t09 ^ t10; \
-    t13 = b   ^ x  ; \
-    t14 = t01 ^ x  ; \
-    t15 = c   ^ t05; \
-    t16 = t11 | t13; \
-    t17 = t02 | t14; \
-    w   = t15 ^ t17; \
-    y   = a   ^ t16; \
+    u32 r4; \
+    \
+    r4 =  r1; r1 |= r2; \
+    r1 ^= r3; r4 ^= r2; \
+    r2 ^= r1; r3 |= r4; \
+    r3 &= r0; r4 ^= r2; \
+    r3 ^= r1; r1 |= r4; \
+    r1 ^= r0; r0 |= r4; \
+    r0 ^= r2; r1 ^= r4; \
+    r2 ^= r1; r1 &= r0; \
+    r1 ^= r4; r2 = ~r2; \
+    r2 |= r0; \
+    r4 ^= r2; \
+    \
+    w = r4; x = r3; y = r1; z = r0; \
   }
 
-#define SBOX7_INVERSE(a, b, c, d, w, x, y, z) \
+#define SBOX7_INVERSE(r0, r1, r2, r3, w, x, y, z) \
   { \
-    u32 t02, t03, t04, t06, t07, t08, t09; \
-    u32 t10, t11, t13, t14, t15, t16, t01; \
-    t01 = a   & b  ; \
-    t02 = a   | b  ; \
-    t03 = c   | t01; \
-    t04 = d   & t02; \
-    z   = t03 ^ t04; \
-    t06 = b   ^ t04; \
-    t07 = d   ^ z  ; \
-    t08 =     ~ t07; \
-    t09 = t06 | t08; \
-    t10 = b   ^ d  ; \
-    t11 = a   | d  ; \
-    x   = a   ^ t09; \
-    t13 = c   ^ t06; \
-    t14 = c   & t11; \
-    t15 = d   | x  ; \
-    t16 = t01 | t10; \
-    w   = t13 ^ t15; \
-    y   = t14 ^ t16; \
+    u32 r4; \
+    \
+    r4 =  r2; r2 ^= r0; \
+    r0 &= r3; r4 |= r3; \
+    r2 = ~r2; r3 ^= r1; \
+    r1 |= r0; r0 ^= r2; \
+    r2 &= r4; r3 &= r4; \
+    r1 ^= r2; r2 ^= r0; \
+    r0 |= r2; r4 ^= r1; \
+    r0 ^= r3; r3 ^= r4; \
+    r4 |= r0; r3 ^= r2; \
+    r4 ^= r2; \
+    \
+    w = r3; x = r0; y = r1; z = r4; \
   }
 
 /* XOR BLOCK1 into BLOCK0.  */
@@ -671,6 +634,15 @@ serpent_setkey_internal (serpent_context_t *context,
 
   serpent_key_prepare (key, key_length, key_prepared);
   serpent_subkeys_generate (key_prepared, context->keys);
+
+#ifdef USE_AVX2
+  context->use_avx2 = 0;
+  if ((_gcry_get_hw_features () & HWF_INTEL_AVX2))
+    {
+      context->use_avx2 = 1;
+    }
+#endif
+
   _gcry_burn_stack (272 * sizeof (u32));
 }
 
@@ -687,10 +659,10 @@ serpent_setkey (void *ctx,
   if (! serpent_init_done)
     {
       /* Execute a self-test the first time, Serpent is used.  */
+      serpent_init_done = 1;
       serpent_test_ret = serpent_test ();
       if (serpent_test_ret)
 	log_error ("Serpent test failure: %s\n", serpent_test_ret);
-      serpent_init_done = 1;
     }
 
   if (serpent_test_ret)
@@ -840,6 +812,361 @@ serpent_decrypt (void *ctx, byte *buffer_out, const byte *buffer_in)
 
 
 
+/* Bulk encryption of complete blocks in CTR mode.  This function is only
+   intended for the bulk encryption feature of cipher.c.  CTR is expected to be
+   of size sizeof(serpent_block_t). */
+void
+_gcry_serpent_ctr_enc(void *context, unsigned char *ctr,
+                      void *outbuf_arg, const void *inbuf_arg,
+                      unsigned int nblocks)
+{
+  serpent_context_t *ctx = context;
+  unsigned char *outbuf = outbuf_arg;
+  const unsigned char *inbuf = inbuf_arg;
+  unsigned char tmpbuf[sizeof(serpent_block_t)];
+  int burn_stack_depth = 2 * sizeof (serpent_block_t);
+  int i;
+
+#ifdef USE_AVX2
+  if (ctx->use_avx2)
+    {
+      int did_use_avx2 = 0;
+
+      /* Process data in 16 block chunks. */
+      while (nblocks >= 16)
+        {
+          _gcry_serpent_avx2_ctr_enc(ctx, outbuf, inbuf, ctr);
+
+          nblocks -= 16;
+          outbuf += 16 * sizeof(serpent_block_t);
+          inbuf  += 16 * sizeof(serpent_block_t);
+          did_use_avx2 = 1;
+        }
+
+      if (did_use_avx2)
+        {
+          /* clear avx2 registers used by serpent-sse2 */
+          asm volatile ("vzeroall;\n":::);
+
+          /* serpent-avx2 assembly code does not use stack */
+          if (nblocks == 0)
+            burn_stack_depth = 0;
+        }
+
+      /* Use generic/sse2 code to handle smaller chunks... */
+      /* TODO: use caching instead? */
+    }
+#endif
+
+#ifdef USE_SSE2
+  {
+    int did_use_sse2 = 0;
+
+    /* Process data in 8 block chunks. */
+    while (nblocks >= 8)
+      {
+        _gcry_serpent_sse2_ctr_enc(ctx, outbuf, inbuf, ctr);
+
+        nblocks -= 8;
+        outbuf += 8 * sizeof(serpent_block_t);
+        inbuf  += 8 * sizeof(serpent_block_t);
+        did_use_sse2 = 1;
+      }
+
+    if (did_use_sse2)
+      {
+        /* clear SSE2 registers used by serpent-sse2 */
+        asm volatile (
+          "pxor %%xmm0, %%xmm0;\n"
+          "pxor %%xmm1, %%xmm1;\n"
+          "pxor %%xmm2, %%xmm2;\n"
+          "pxor %%xmm3, %%xmm3;\n"
+          "pxor %%xmm4, %%xmm4;\n"
+          "pxor %%xmm5, %%xmm5;\n"
+          "pxor %%xmm6, %%xmm6;\n"
+          "pxor %%xmm7, %%xmm7;\n"
+          "pxor %%xmm10, %%xmm10;\n"
+          "pxor %%xmm11, %%xmm11;\n"
+          "pxor %%xmm12, %%xmm12;\n"
+          "pxor %%xmm13, %%xmm13;\n"
+          :::);
+
+        /* serpent-sse2 assembly code does not use stack */
+        if (nblocks == 0)
+          burn_stack_depth = 0;
+      }
+
+    /* Use generic code to handle smaller chunks... */
+    /* TODO: use caching instead? */
+  }
+#endif
+
+  for ( ;nblocks; nblocks-- )
+    {
+      /* Encrypt the counter. */
+      serpent_encrypt_internal(ctx, ctr, tmpbuf);
+      /* XOR the input with the encrypted counter and store in output.  */
+      buf_xor(outbuf, tmpbuf, inbuf, sizeof(serpent_block_t));
+      outbuf += sizeof(serpent_block_t);
+      inbuf  += sizeof(serpent_block_t);
+      /* Increment the counter.  */
+      for (i = sizeof(serpent_block_t); i > 0; i--)
+        {
+          ctr[i-1]++;
+          if (ctr[i-1])
+            break;
+        }
+    }
+
+  wipememory(tmpbuf, sizeof(tmpbuf));
+  _gcry_burn_stack(burn_stack_depth);
+}
+
+/* Bulk decryption of complete blocks in CBC mode.  This function is only
+   intended for the bulk encryption feature of cipher.c. */
+void
+_gcry_serpent_cbc_dec(void *context, unsigned char *iv,
+                       void *outbuf_arg, const void *inbuf_arg,
+                       unsigned int nblocks)
+{
+  serpent_context_t *ctx = context;
+  unsigned char *outbuf = outbuf_arg;
+  const unsigned char *inbuf = inbuf_arg;
+  unsigned char savebuf[sizeof(serpent_block_t)];
+  int burn_stack_depth = 2 * sizeof (serpent_block_t);
+
+#ifdef USE_AVX2
+  if (ctx->use_avx2)
+    {
+      int did_use_avx2 = 0;
+
+      /* Process data in 16 block chunks. */
+      while (nblocks >= 16)
+        {
+          _gcry_serpent_avx2_cbc_dec(ctx, outbuf, inbuf, iv);
+
+          nblocks -= 16;
+          outbuf += 16 * sizeof(serpent_block_t);
+          inbuf  += 16 * sizeof(serpent_block_t);
+          did_use_avx2 = 1;
+        }
+
+      if (did_use_avx2)
+        {
+          /* clear avx2 registers used by serpent-sse2 */
+          asm volatile ("vzeroall;\n":::);
+
+          /* serpent-avx2 assembly code does not use stack */
+          if (nblocks == 0)
+            burn_stack_depth = 0;
+        }
+
+      /* Use generic/sse2 code to handle smaller chunks... */
+    }
+#endif
+
+#ifdef USE_SSE2
+  {
+    int did_use_sse2 = 0;
+
+    /* Process data in 8 block chunks. */
+    while (nblocks >= 8)
+      {
+        _gcry_serpent_sse2_cbc_dec(ctx, outbuf, inbuf, iv);
+
+        nblocks -= 8;
+        outbuf += 8 * sizeof(serpent_block_t);
+        inbuf  += 8 * sizeof(serpent_block_t);
+        did_use_sse2 = 1;
+      }
+
+    if (did_use_sse2)
+      {
+        /* clear SSE2 registers used by serpent-sse2 */
+        asm volatile (
+          "pxor %%xmm0, %%xmm0;\n"
+          "pxor %%xmm1, %%xmm1;\n"
+          "pxor %%xmm2, %%xmm2;\n"
+          "pxor %%xmm3, %%xmm3;\n"
+          "pxor %%xmm4, %%xmm4;\n"
+          "pxor %%xmm5, %%xmm5;\n"
+          "pxor %%xmm6, %%xmm6;\n"
+          "pxor %%xmm7, %%xmm7;\n"
+          "pxor %%xmm10, %%xmm10;\n"
+          "pxor %%xmm11, %%xmm11;\n"
+          "pxor %%xmm12, %%xmm12;\n"
+          "pxor %%xmm13, %%xmm13;\n"
+          :::);
+
+        /* serpent-sse2 assembly code does not use stack */
+        if (nblocks == 0)
+          burn_stack_depth = 0;
+      }
+
+    /* Use generic code to handle smaller chunks... */
+  }
+#endif
+
+  for ( ;nblocks; nblocks-- )
+    {
+      /* We need to save INBUF away because it may be identical to
+         OUTBUF.  */
+      memcpy(savebuf, inbuf, sizeof(serpent_block_t));
+
+      serpent_decrypt_internal (ctx, inbuf, outbuf);
+
+      buf_xor(outbuf, outbuf, iv, sizeof(serpent_block_t));
+      memcpy(iv, savebuf, sizeof(serpent_block_t));
+      inbuf += sizeof(serpent_block_t);
+      outbuf += sizeof(serpent_block_t);
+    }
+
+  wipememory(savebuf, sizeof(savebuf));
+  _gcry_burn_stack(burn_stack_depth);
+}
+
+/* Bulk decryption of complete blocks in CFB mode.  This function is only
+   intended for the bulk encryption feature of cipher.c. */
+void
+_gcry_serpent_cfb_dec(void *context, unsigned char *iv,
+                      void *outbuf_arg, const void *inbuf_arg,
+                      unsigned int nblocks)
+{
+  serpent_context_t *ctx = context;
+  unsigned char *outbuf = outbuf_arg;
+  const unsigned char *inbuf = inbuf_arg;
+  int burn_stack_depth = 2 * sizeof (serpent_block_t);
+
+#ifdef USE_AVX2
+  if (ctx->use_avx2)
+    {
+      int did_use_avx2 = 0;
+
+      /* Process data in 16 block chunks. */
+      while (nblocks >= 16)
+        {
+          _gcry_serpent_avx2_cfb_dec(ctx, outbuf, inbuf, iv);
+
+          nblocks -= 16;
+          outbuf += 16 * sizeof(serpent_block_t);
+          inbuf  += 16 * sizeof(serpent_block_t);
+          did_use_avx2 = 1;
+        }
+
+      if (did_use_avx2)
+        {
+          /* clear avx2 registers used by serpent-sse2 */
+          asm volatile ("vzeroall;\n":::);
+
+          /* serpent-avx2 assembly code does not use stack */
+          if (nblocks == 0)
+            burn_stack_depth = 0;
+        }
+
+      /* Use generic/sse2 code to handle smaller chunks... */
+    }
+#endif
+
+#ifdef USE_SSE2
+  {
+    int did_use_sse2 = 0;
+
+    /* Process data in 8 block chunks. */
+    while (nblocks >= 8)
+      {
+        _gcry_serpent_sse2_cfb_dec(ctx, outbuf, inbuf, iv);
+
+        nblocks -= 8;
+        outbuf += 8 * sizeof(serpent_block_t);
+        inbuf  += 8 * sizeof(serpent_block_t);
+        did_use_sse2 = 1;
+      }
+
+    if (did_use_sse2)
+      {
+        /* clear SSE2 registers used by serpent-sse2 */
+        asm volatile (
+          "pxor %%xmm0, %%xmm0;\n"
+          "pxor %%xmm1, %%xmm1;\n"
+          "pxor %%xmm2, %%xmm2;\n"
+          "pxor %%xmm3, %%xmm3;\n"
+          "pxor %%xmm4, %%xmm4;\n"
+          "pxor %%xmm5, %%xmm5;\n"
+          "pxor %%xmm6, %%xmm6;\n"
+          "pxor %%xmm7, %%xmm7;\n"
+          "pxor %%xmm10, %%xmm10;\n"
+          "pxor %%xmm11, %%xmm11;\n"
+          "pxor %%xmm12, %%xmm12;\n"
+          "pxor %%xmm13, %%xmm13;\n"
+          :::);
+
+        /* serpent-sse2 assembly code does not use stack */
+        if (nblocks == 0)
+          burn_stack_depth = 0;
+      }
+
+    /* Use generic code to handle smaller chunks... */
+  }
+#endif
+
+  for ( ;nblocks; nblocks-- )
+    {
+      serpent_encrypt_internal(ctx, iv, iv);
+      buf_xor_n_copy(outbuf, iv, inbuf, sizeof(serpent_block_t));
+      outbuf += sizeof(serpent_block_t);
+      inbuf  += sizeof(serpent_block_t);
+    }
+
+  _gcry_burn_stack(burn_stack_depth);
+}
+
+
+
+/* Run the self-tests for SERPENT-CTR-128, tests IV increment of bulk CTR
+   encryption.  Returns NULL on success. */
+static const char*
+selftest_ctr_128 (void)
+{
+  const int nblocks = 16+1;
+  const int blocksize = sizeof(serpent_block_t);
+  const int context_size = sizeof(serpent_context_t);
+
+  return _gcry_selftest_helper_ctr("SERPENT", &serpent_setkey,
+           &serpent_encrypt, &_gcry_serpent_ctr_enc, nblocks, blocksize,
+	   context_size);
+}
+
+
+/* Run the self-tests for SERPENT-CBC-128, tests bulk CBC decryption.
+   Returns NULL on success. */
+static const char*
+selftest_cbc_128 (void)
+{
+  const int nblocks = 16+2;
+  const int blocksize = sizeof(serpent_block_t);
+  const int context_size = sizeof(serpent_context_t);
+
+  return _gcry_selftest_helper_cbc("SERPENT", &serpent_setkey,
+           &serpent_encrypt, &_gcry_serpent_cbc_dec, nblocks, blocksize,
+	   context_size);
+}
+
+
+/* Run the self-tests for SERPENT-CBC-128, tests bulk CBC decryption.
+   Returns NULL on success. */
+static const char*
+selftest_cfb_128 (void)
+{
+  const int nblocks = 16+2;
+  const int blocksize = sizeof(serpent_block_t);
+  const int context_size = sizeof(serpent_context_t);
+
+  return _gcry_selftest_helper_cfb("SERPENT", &serpent_setkey,
+           &serpent_encrypt, &_gcry_serpent_cfb_dec, nblocks, blocksize,
+	   context_size);
+}
+
+
 /* Serpent test.  */
 
 static const char *
@@ -848,6 +1175,7 @@ serpent_test (void)
   serpent_context_t context;
   unsigned char scratch[16];
   unsigned int i;
+  const char *r;
 
   static struct test
   {
@@ -918,6 +1246,15 @@ serpent_test (void)
 	  return "Serpent-256 test decryption failed.";
 	}
     }
+
+  if ( (r = selftest_ctr_128 ()) )
+    return r;
+
+  if ( (r = selftest_cbc_128 ()) )
+    return r;
+
+  if ( (r = selftest_cfb_128 ()) )
+    return r;
 
   return NULL;
 }

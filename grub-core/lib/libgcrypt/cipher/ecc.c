@@ -306,7 +306,6 @@ static void *progress_cb_data;
 
 
 /* Local prototypes. */
-static gcry_mpi_t gen_k (gcry_mpi_t p, int security_level);
 static void test_keys (ECC_secret_key * sk, unsigned int nbits);
 static int check_secret_key (ECC_secret_key * sk);
 static gpg_err_code_t sign (gcry_mpi_t input, ECC_secret_key *skey,
@@ -424,30 +423,6 @@ gen_y_2 (gcry_mpi_t x, elliptic_curve_t *base)
 }
 
 
-/* Generate a random secret scalar k with an order of p
-
-   At the beginning this was identical to the code is in elgamal.c.
-   Later imporved by mmr.   Further simplified by wk.  */
-static gcry_mpi_t
-gen_k (gcry_mpi_t p, int security_level)
-{
-  gcry_mpi_t k;
-  unsigned int nbits;
-
-  nbits = mpi_get_nbits (p);
-  k = mpi_snew (nbits);
-  if (DBG_CIPHER)
-    log_debug ("choosing a random k of %u bits at seclevel %d\n",
-               nbits, security_level);
-
-  gcry_mpi_randomize (k, nbits, security_level);
-
-  mpi_mod (k, k, p);  /*  k = k mod p  */
-
-  return k;
-}
-
-
 /* Generate the crypto system setup.  This function takes the NAME of
    a curve or the desired number of bits and stores at R_CURVE the
    parameters of the named curve or those of a suitable curve.  If
@@ -529,7 +504,6 @@ generate_key (ECC_secret_key *sk, unsigned int nbits, const char *name,
 {
   gpg_err_code_t err;
   elliptic_curve_t E;
-  gcry_mpi_t d;
   mpi_point_struct Q;
   mpi_ec_t ctx;
   gcry_random_level_t random_level;
@@ -554,12 +528,12 @@ generate_key (ECC_secret_key *sk, unsigned int nbits, const char *name,
     }
 
   random_level = transient_key ? GCRY_STRONG_RANDOM : GCRY_VERY_STRONG_RANDOM;
-  d = gen_k (E.n, random_level);
+  sk->d = _gcry_dsa_gen_k (E.n, random_level);
 
   /* Compute Q.  */
   point_init (&Q);
   ctx = _gcry_mpi_ec_p_internal_new (E.p, E.a);
-  _gcry_mpi_ec_mul_point (&Q, d, &E.G, ctx);
+  _gcry_mpi_ec_mul_point (&Q, sk->d, &E.G, ctx);
 
   /* Copy the stuff to the key structures. */
   sk->E.p = mpi_copy (E.p);
@@ -570,50 +544,47 @@ generate_key (ECC_secret_key *sk, unsigned int nbits, const char *name,
   sk->E.n = mpi_copy (E.n);
   point_init (&sk->Q);
 
-  /* We want the Q=(x,y) be a "compliant key" in terms of the http://tools.ietf.org/html/draft-jivsov-ecc-compact,
-   * which simply means that we choose either Q=(x,y) or -Q=(x,p-y) such that we end up with the min(y,p-y) as the y coordinate.
-   * Such a public key allows the most efficient compression: y can simply be dropped because we know that it's a minimum of the two
-   * possibilities without any loss of security.
-   */
+  /* We want the Q=(x,y) be a "compliant key" in terms of the
+   * http://tools.ietf.org/html/draft-jivsov-ecc-compact, which simply
+   * means that we choose either Q=(x,y) or -Q=(x,p-y) such that we
+   * end up with the min(y,p-y) as the y coordinate.  Such a public
+   * key allows the most efficient compression: y can simply be
+   * dropped because we know that it's a minimum of the two
+   * possibilities without any loss of security.  */
   {
-      gcry_mpi_t x, p_y, y, z = mpi_copy(mpi_const (MPI_C_ONE));
-      const unsigned int nbits = mpi_get_nbits (E.p);
-      x = mpi_new (nbits);
-      p_y = mpi_new (nbits);
-      y = mpi_new (nbits);
+    gcry_mpi_t x, y, p_y;
+    const unsigned int pbits = mpi_get_nbits (E.p);
 
-      if (_gcry_mpi_ec_get_affine (x, y, &Q, ctx))
-        log_fatal ("ecgen: Failed to get affine coordinates for Q\n");
+    x = mpi_new (pbits);
+    y = mpi_new (pbits);
+    p_y = mpi_new (pbits);
 
-      mpi_sub( p_y, E.p, y );	/* p_y = p-y */
+    if (_gcry_mpi_ec_get_affine (x, y, &Q, ctx))
+      log_fatal ("ecgen: Failed to get affine coordinates for %s\n", "Q");
 
-      if( mpi_cmp( p_y /*p-y*/, y ) < 0 )  {	/* is p-y < p ? */
-        log_mpidump ("ecgen p-y", p_y);
-        log_mpidump ("ecgen y  ", y);
-        log_debug   ("ecgen will replace y with p-y\n");
-        /* log_mpidump ("ecgen d before", d); */
-        /* we need to end up with -Q; this assures that new Q's y is the smallest one */
-        mpi_sub( sk->d, E.n, d );	/* d = order-d */
-        /* log_mpidump ("ecgen d after ", sk->d); */
-	gcry_mpi_point_set (&sk->Q, x, p_y/*p-y*/, z);	/* Q = -Q */
+    mpi_sub (p_y, E.p, y);	/* p_y = p - y */
+
+    if (mpi_cmp (p_y, y) < 0)   /* p - y < p */
+      {
+        /* We need to end up with -Q; this assures that new Q's y is
+           the smallest one */
+        mpi_sub (sk->d, E.n, sk->d);   /* d = order - d */
+	gcry_mpi_point_snatch_set (&sk->Q, x, p_y, mpi_alloc_set_ui (1));
+
         if (DBG_CIPHER)
-        {
-          log_debug   ("ecgen converted Q to a compliant point\n");
-        }
-       }
-      else  {
-        /* no change is needed exactly 50% of the time: just copy */
-        sk->d = mpi_copy (d);
+          log_debug ("ecgen converted Q to a compliant point\n");
+      }
+    else /* p - y >= p */
+      {
+        /* No change is needed exactly 50% of the time: just copy. */
 	point_set (&sk->Q, &Q);
         if (DBG_CIPHER)
-        {
-          log_debug   ("ecgen didn't need to convert Q to a compliant point\n");
-        }
+          log_debug ("ecgen didn't need to convert Q to a compliant point\n");
+
+        mpi_free (p_y);
+        mpi_free (x);
       }
-      mpi_free (x);
-      mpi_free (p_y);
-      mpi_free (y);
-      mpi_free (z);
+    mpi_free (y);
   }
 
   /* We also return copies of G and Q in affine coordinates if
@@ -621,17 +592,16 @@ generate_key (ECC_secret_key *sk, unsigned int nbits, const char *name,
   if (g_x && g_y)
     {
       if (_gcry_mpi_ec_get_affine (g_x, g_y, &sk->E.G, ctx))
-        log_fatal ("ecgen: Failed to get affine coordinates for G\n");
+        log_fatal ("ecgen: Failed to get affine coordinates for %s\n", "G");
     }
   if (q_x && q_y)
     {
       if (_gcry_mpi_ec_get_affine (q_x, q_y, &sk->Q, ctx))
-        log_fatal ("ecgen: Failed to get affine coordinates for Q\n");
+        log_fatal ("ecgen: Failed to get affine coordinates for %s\n", "Q");
     }
   _gcry_mpi_ec_free (ctx);
 
   point_free (&Q);
-  mpi_free (d);
 
   *r_usedcurve = E.name;
   curve_free (&E);
@@ -800,7 +770,7 @@ sign (gcry_mpi_t input, ECC_secret_key *skey, gcry_mpi_t r, gcry_mpi_t s)
              do_while because we want to keep the value of R even if S
              has to be recomputed.  */
           mpi_free (k);
-          k = gen_k (skey->E.n, GCRY_STRONG_RANDOM);
+          k = _gcry_dsa_gen_k (skey->E.n, GCRY_STRONG_RANDOM);
           _gcry_mpi_ec_mul_point (&I, k, &skey->E.G, ctx);
           if (_gcry_mpi_ec_get_affine (x, NULL, &I, ctx))
             {

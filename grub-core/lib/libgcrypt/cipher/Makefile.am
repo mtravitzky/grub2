@@ -40,6 +40,7 @@ libcipher_la_LIBADD = $(GCRYPT_MODULES)
 libcipher_la_SOURCES = \
 cipher.c cipher-internal.h \
 cipher-cbc.c cipher-cfb.c cipher-ofb.c cipher-ctr.c cipher-aeswrap.c \
+cipher-selftest.c cipher-selftest.h \
 pubkey.c pubkey-internal.h \
 md.c \
 kdf.c kdf-internal.h \
@@ -48,12 +49,13 @@ bithelp.h  \
 bufhelp.h  \
 primegen.c  \
 hash-common.c hash-common.h \
+dsa-common.c \
 rmd.h
 
 EXTRA_libcipher_la_SOURCES = \
 arcfour.c \
-blowfish.c \
-cast5.c \
+blowfish.c blowfish-amd64.S \
+cast5.c cast5-amd64.S \
 crc.c \
 des.c \
 dsa.c \
@@ -62,20 +64,21 @@ ecc.c \
 idea.c \
 md4.c \
 md5.c \
-rijndael.c rijndael-tables.h \
+rijndael.c rijndael-tables.h rijndael-amd64.S \
 rmd160.c \
 rsa.c \
 scrypt.c \
 seed.c \
-serpent.c \
+serpent.c serpent-sse2-amd64.S serpent-avx2-amd64.S \
 sha1.c \
 sha256.c \
 sha512.c \
 tiger.c \
 whirlpool.c \
-twofish.c \
+twofish.c twofish-amd64.S \
 rfc2268.c \
-camellia.c camellia.h camellia-glue.c camellia_aesni_avx_x86-64.S
+camellia.c camellia.h camellia-glue.c camellia-aesni-avx-amd64.S \
+  camellia-aesni-avx2-amd64.S
 
 if ENABLE_O_FLAG_MUNGING
 o_flag_munging = sed -e 's/-O\([2-9s][2-9s]*\)/-O1/' -e 's/-Ofast/-O1/g'
