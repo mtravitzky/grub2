@@ -792,22 +792,22 @@ serpent_decrypt_internal (serpent_context_t *context,
   memcpy (output, b_next, sizeof (b_next));
 }
 
-static void
+static unsigned int
 serpent_encrypt (void *ctx, byte *buffer_out, const byte *buffer_in)
 {
   serpent_context_t *context = ctx;
 
   serpent_encrypt_internal (context, buffer_in, buffer_out);
-  _gcry_burn_stack (2 * sizeof (serpent_block_t));
+  return /*burn_stack*/ (2 * sizeof (serpent_block_t));
 }
 
-static void
+static unsigned int
 serpent_decrypt (void *ctx, byte *buffer_out, const byte *buffer_in)
 {
   serpent_context_t *context = ctx;
 
   serpent_decrypt_internal (context, buffer_in, buffer_out);
-  _gcry_burn_stack (2 * sizeof (serpent_block_t));
+  return /*burn_stack*/ (2 * sizeof (serpent_block_t));
 }
 
 
@@ -845,9 +845,6 @@ _gcry_serpent_ctr_enc(void *context, unsigned char *ctr,
 
       if (did_use_avx2)
         {
-          /* clear avx2 registers used by serpent-sse2 */
-          asm volatile ("vzeroall;\n":::);
-
           /* serpent-avx2 assembly code does not use stack */
           if (nblocks == 0)
             burn_stack_depth = 0;
@@ -875,22 +872,6 @@ _gcry_serpent_ctr_enc(void *context, unsigned char *ctr,
 
     if (did_use_sse2)
       {
-        /* clear SSE2 registers used by serpent-sse2 */
-        asm volatile (
-          "pxor %%xmm0, %%xmm0;\n"
-          "pxor %%xmm1, %%xmm1;\n"
-          "pxor %%xmm2, %%xmm2;\n"
-          "pxor %%xmm3, %%xmm3;\n"
-          "pxor %%xmm4, %%xmm4;\n"
-          "pxor %%xmm5, %%xmm5;\n"
-          "pxor %%xmm6, %%xmm6;\n"
-          "pxor %%xmm7, %%xmm7;\n"
-          "pxor %%xmm10, %%xmm10;\n"
-          "pxor %%xmm11, %%xmm11;\n"
-          "pxor %%xmm12, %%xmm12;\n"
-          "pxor %%xmm13, %%xmm13;\n"
-          :::);
-
         /* serpent-sse2 assembly code does not use stack */
         if (nblocks == 0)
           burn_stack_depth = 0;
@@ -953,9 +934,6 @@ _gcry_serpent_cbc_dec(void *context, unsigned char *iv,
 
       if (did_use_avx2)
         {
-          /* clear avx2 registers used by serpent-sse2 */
-          asm volatile ("vzeroall;\n":::);
-
           /* serpent-avx2 assembly code does not use stack */
           if (nblocks == 0)
             burn_stack_depth = 0;
@@ -982,22 +960,6 @@ _gcry_serpent_cbc_dec(void *context, unsigned char *iv,
 
     if (did_use_sse2)
       {
-        /* clear SSE2 registers used by serpent-sse2 */
-        asm volatile (
-          "pxor %%xmm0, %%xmm0;\n"
-          "pxor %%xmm1, %%xmm1;\n"
-          "pxor %%xmm2, %%xmm2;\n"
-          "pxor %%xmm3, %%xmm3;\n"
-          "pxor %%xmm4, %%xmm4;\n"
-          "pxor %%xmm5, %%xmm5;\n"
-          "pxor %%xmm6, %%xmm6;\n"
-          "pxor %%xmm7, %%xmm7;\n"
-          "pxor %%xmm10, %%xmm10;\n"
-          "pxor %%xmm11, %%xmm11;\n"
-          "pxor %%xmm12, %%xmm12;\n"
-          "pxor %%xmm13, %%xmm13;\n"
-          :::);
-
         /* serpent-sse2 assembly code does not use stack */
         if (nblocks == 0)
           burn_stack_depth = 0;
@@ -1055,9 +1017,6 @@ _gcry_serpent_cfb_dec(void *context, unsigned char *iv,
 
       if (did_use_avx2)
         {
-          /* clear avx2 registers used by serpent-sse2 */
-          asm volatile ("vzeroall;\n":::);
-
           /* serpent-avx2 assembly code does not use stack */
           if (nblocks == 0)
             burn_stack_depth = 0;
@@ -1084,22 +1043,6 @@ _gcry_serpent_cfb_dec(void *context, unsigned char *iv,
 
     if (did_use_sse2)
       {
-        /* clear SSE2 registers used by serpent-sse2 */
-        asm volatile (
-          "pxor %%xmm0, %%xmm0;\n"
-          "pxor %%xmm1, %%xmm1;\n"
-          "pxor %%xmm2, %%xmm2;\n"
-          "pxor %%xmm3, %%xmm3;\n"
-          "pxor %%xmm4, %%xmm4;\n"
-          "pxor %%xmm5, %%xmm5;\n"
-          "pxor %%xmm6, %%xmm6;\n"
-          "pxor %%xmm7, %%xmm7;\n"
-          "pxor %%xmm10, %%xmm10;\n"
-          "pxor %%xmm11, %%xmm11;\n"
-          "pxor %%xmm12, %%xmm12;\n"
-          "pxor %%xmm13, %%xmm13;\n"
-          :::);
-
         /* serpent-sse2 assembly code does not use stack */
         if (nblocks == 0)
           burn_stack_depth = 0;

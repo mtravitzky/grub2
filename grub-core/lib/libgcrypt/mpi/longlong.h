@@ -255,14 +255,15 @@ extern UDItype __udiv_qrnnd ();
 		   : "=&r" ((xh)),                                      \
 		     "=r" ((xl))                                        \
 		   : "r" ((USItype)(a)),                                \
-		     "r" ((USItype)(b)))
+		     "r" ((USItype)(b))                                 \
+		   : "r0", "r1")
 #endif /* __ARM_ARCH >= 4 */
 #define UMUL_TIME 20
 #define UDIV_TIME 100
 #if (defined __ARM_ARCH && __ARM_ARCH >= 5)
 #define count_leading_zeros(count, x) \
   __asm__ ("clz %0, %1"                                                 \
-		   : "=r" ((count))                                     \
+		   : "=r" ((USItype)(count))                            \
 		   : "r" ((USItype)(x)))
 #endif /* __ARM_ARCH >= 5 */
 #endif /* __arm__ */

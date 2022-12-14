@@ -107,6 +107,7 @@ struct gcry_mpi
 #endif
 
 #define gcry_mpi_copy _gcry_mpi_copy
+#define gcry_mpi_cmp_ui _gcry_mpi_cmp_ui
 
 void _gcry_mpi_immutable_failed (void);
 #define mpi_immutable_failed() _gcry_mpi_immutable_failed ()
