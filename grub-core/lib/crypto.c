@@ -51,7 +51,7 @@ grub_burn_stack (grub_size_t size)
 }
 
 void
-_gcry_burn_stack (int size)
+_gcry_burn_stack (unsigned int size)
 {
   grub_burn_stack (size);
 }
