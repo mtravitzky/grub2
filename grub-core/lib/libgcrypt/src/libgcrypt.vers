@@ -39,6 +39,7 @@ GCRYPT_1.6 {
     gcry_md_algo_info; gcry_md_algo_name; gcry_md_close;
     gcry_md_copy; gcry_md_ctl; gcry_md_enable; gcry_md_get;
     gcry_md_get_algo; gcry_md_get_algo_dlen; gcry_md_hash_buffer;
+    gcry_md_hash_buffers;
     gcry_md_info; gcry_md_is_enabled; gcry_md_is_secure;
     gcry_md_map_name; gcry_md_open; gcry_md_read;
     gcry_md_reset; gcry_md_setkey;
@@ -77,6 +78,7 @@ GCRYPT_1.6 {
     gcry_sexp_sprint; gcry_sexp_sscan; gcry_sexp_vlist;
     gcry_sexp_nth_string;
 
+    gcry_mpi_is_neg; gcry_mpi_neg; gcry_mpi_abs;
     gcry_mpi_add; gcry_mpi_add_ui; gcry_mpi_addm; gcry_mpi_aprint;
     gcry_mpi_clear_bit; gcry_mpi_clear_flag; gcry_mpi_clear_highbit;
     gcry_mpi_cmp; gcry_mpi_cmp_ui; gcry_mpi_copy; gcry_mpi_div;
@@ -97,6 +99,7 @@ GCRYPT_1.6 {
     gcry_mpi_ec_set_mpi; gcry_mpi_ec_set_point;
     gcry_mpi_ec_get_affine;
     gcry_mpi_ec_dup; gcry_mpi_ec_add; gcry_mpi_ec_mul;
+    gcry_mpi_ec_curve_point;
 
     _gcry_mpi_get_const;
 

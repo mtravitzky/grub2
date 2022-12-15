@@ -63,6 +63,7 @@
 #define gcry_md_get_algo            _gcry_md_get_algo
 #define gcry_md_get_algo_dlen       _gcry_md_get_algo_dlen
 #define gcry_md_hash_buffer         _gcry_md_hash_buffer
+#define gcry_md_hash_buffers        _gcry_md_hash_buffers
 #define gcry_md_info                _gcry_md_info
 #define gcry_md_is_enabled          _gcry_md_is_enabled
 #define gcry_md_is_secure           _gcry_md_is_secure
@@ -279,6 +280,7 @@ gcry_err_code_t gcry_md_get (gcry_md_hd_t hd, int algo,
 #undef gcry_md_get_algo
 #undef gcry_md_get_algo_dlen
 #undef gcry_md_hash_buffer
+#undef gcry_md_hash_buffers
 #undef gcry_md_info
 #undef gcry_md_is_enabled
 #undef gcry_md_is_secure
@@ -455,6 +457,7 @@ MARK_VISIBLE (gcry_md_get)
 MARK_VISIBLE (gcry_md_get_algo)
 MARK_VISIBLE (gcry_md_get_algo_dlen)
 MARK_VISIBLE (gcry_md_hash_buffer)
+MARK_VISIBLE (gcry_md_hash_buffers)
 MARK_VISIBLE (gcry_md_info)
 MARK_VISIBLE (gcry_md_is_enabled)
 MARK_VISIBLE (gcry_md_is_secure)
@@ -536,6 +539,7 @@ MARK_VISIBLE (gcry_sexp_sprint)
 MARK_VISIBLE (gcry_sexp_sscan)
 MARK_VISIBLE (gcry_sexp_vlist)
 
+MARK_VISIBLEX(gcry_mpi_abs)
 MARK_VISIBLE (gcry_mpi_add)
 MARK_VISIBLE (gcry_mpi_add_ui)
 MARK_VISIBLE (gcry_mpi_addm)
@@ -549,6 +553,7 @@ MARK_VISIBLE (gcry_mpi_copy)
 MARK_VISIBLE (gcry_mpi_div)
 MARK_VISIBLE (gcry_mpi_dump)
 MARK_VISIBLEX(gcry_mpi_ec_add)
+MARK_VISIBLEX(gcry_mpi_ec_curve_point)
 MARK_VISIBLEX(gcry_mpi_ec_dup)
 MARK_VISIBLEX(gcry_mpi_ec_get_affine)
 MARK_VISIBLEX(gcry_mpi_ec_mul)
@@ -561,12 +566,14 @@ MARK_VISIBLE (gcry_mpi_gcd)
 MARK_VISIBLE (gcry_mpi_get_flag)
 MARK_VISIBLE (gcry_mpi_get_nbits)
 MARK_VISIBLE (gcry_mpi_get_opaque)
+MARK_VISIBLEX(gcry_mpi_is_neg)
 MARK_VISIBLE (gcry_mpi_invm)
 MARK_VISIBLE (gcry_mpi_mod)
 MARK_VISIBLE (gcry_mpi_mul)
 MARK_VISIBLE (gcry_mpi_mul_2exp)
 MARK_VISIBLE (gcry_mpi_mul_ui)
 MARK_VISIBLE (gcry_mpi_mulm)
+MARK_VISIBLEX(gcry_mpi_neg)
 MARK_VISIBLE (gcry_mpi_new)
 MARK_VISIBLE (gcry_mpi_point_get)
 MARK_VISIBLE (gcry_mpi_point_new)

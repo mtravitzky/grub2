@@ -41,8 +41,7 @@ static gcry_err_code_t pubkey_sign (int algo, gcry_mpi_t *resarr,
                                     struct pk_encoding_ctx *ctx);
 static gcry_err_code_t pubkey_verify (int algo, gcry_mpi_t hash,
                                       gcry_mpi_t *data, gcry_mpi_t *pkey,
-				     int (*cmp) (void *, gcry_mpi_t),
-                                      void *opaque);
+                                      struct pk_encoding_ctx *ctx);
 
 
 /* A dummy extraspec so that we do not need to tests the extraspec
@@ -179,7 +178,8 @@ dummy_sign (int algorithm, gcry_mpi_t *resarr, gcry_mpi_t data,
 static gcry_err_code_t
 dummy_verify (int algorithm, gcry_mpi_t hash, gcry_mpi_t *data,
               gcry_mpi_t *pkey,
-	      int (*cmp) (void *, gcry_mpi_t), void *opaquev)
+	      int (*cmp) (void *, gcry_mpi_t), void *opaquev,
+              int flags, int hashalgo)
 {
   (void)algorithm;
   (void)hash;
@@ -187,6 +187,8 @@ dummy_verify (int algorithm, gcry_mpi_t hash, gcry_mpi_t *data,
   (void)pkey;
   (void)cmp;
   (void)opaquev;
+  (void)flags;
+  (void)hashalgo;
   fips_signal_error ("using dummy public key function");
   return GPG_ERR_NOT_IMPLEMENTED;
 }
@@ -630,8 +632,8 @@ pubkey_encrypt (int algorithm, gcry_mpi_t *resarr, gcry_mpi_t data,
     {
       log_debug ("pubkey_encrypt: algo=%d\n", algorithm);
       for(i = 0; i < pubkey_get_npkey (algorithm); i++)
-	log_mpidump ("  pkey:", pkey[i]);
-      log_mpidump ("  data:", data);
+	log_mpidump ("  pkey", pkey[i]);
+      log_mpidump ("  data", data);
     }
 
   ath_mutex_lock (&pubkeys_registered_lock);
@@ -651,7 +653,7 @@ pubkey_encrypt (int algorithm, gcry_mpi_t *resarr, gcry_mpi_t data,
   if (!rc && DBG_CIPHER && !fips_mode ())
     {
       for(i = 0; i < pubkey_get_nenc (algorithm); i++)
-	log_mpidump("  encr:", resarr[i] );
+	log_mpidump("  encr", resarr[i] );
     }
   return rc;
 }
@@ -678,9 +680,9 @@ pubkey_decrypt (int algorithm, gcry_mpi_t *result, gcry_mpi_t *data,
     {
       log_debug ("pubkey_decrypt: algo=%d\n", algorithm);
       for(i = 0; i < pubkey_get_nskey (algorithm); i++)
-	log_mpidump ("  skey:", skey[i]);
+	log_mpidump ("  skey", skey[i]);
       for(i = 0; i < pubkey_get_nenc (algorithm); i++)
-	log_mpidump ("  data:", data[i]);
+	log_mpidump ("  data", data[i]);
     }
 
   ath_mutex_lock (&pubkeys_registered_lock);
@@ -699,7 +701,7 @@ pubkey_decrypt (int algorithm, gcry_mpi_t *result, gcry_mpi_t *data,
   ath_mutex_unlock (&pubkeys_registered_lock);
 
   if (!rc && DBG_CIPHER && !fips_mode ())
-    log_mpidump (" plain:", *result);
+    log_mpidump (" plain", *result);
 
   return rc;
 }
@@ -724,8 +726,8 @@ pubkey_sign (int algorithm, gcry_mpi_t *resarr, gcry_mpi_t data,
     {
       log_debug ("pubkey_sign: algo=%d\n", algorithm);
       for(i = 0; i < pubkey_get_nskey (algorithm); i++)
-	log_mpidump ("  skey:", skey[i]);
-      log_mpidump("  data:", data );
+	log_mpidump ("  skey", skey[i]);
+      log_mpidump("  data", data );
     }
 
   ath_mutex_lock (&pubkeys_registered_lock);
@@ -746,7 +748,7 @@ pubkey_sign (int algorithm, gcry_mpi_t *resarr, gcry_mpi_t data,
 
   if (!rc && DBG_CIPHER && !fips_mode ())
     for (i = 0; i < pubkey_get_nsig (algorithm); i++)
-      log_mpidump ("   sig:", resarr[i]);
+      log_mpidump ("   sig", resarr[i]);
 
   return rc;
 }
@@ -757,8 +759,7 @@ pubkey_sign (int algorithm, gcry_mpi_t *resarr, gcry_mpi_t data,
  */
 static gcry_err_code_t
 pubkey_verify (int algorithm, gcry_mpi_t hash, gcry_mpi_t *data,
-               gcry_mpi_t *pkey,
-	       int (*cmp)(void *, gcry_mpi_t), void *opaquev)
+               gcry_mpi_t *pkey, struct pk_encoding_ctx *ctx)
 {
   gcry_pk_spec_t *pubkey;
   gcry_module_t module;
@@ -780,7 +781,9 @@ pubkey_verify (int algorithm, gcry_mpi_t hash, gcry_mpi_t *data,
   if (module)
     {
       pubkey = (gcry_pk_spec_t *) module->spec;
-      rc = pubkey->verify (algorithm, hash, data, pkey, cmp, opaquev);
+      rc = pubkey->verify (algorithm, hash, data, pkey,
+                           ctx->verify_cmp, ctx,
+                           ctx->flags, ctx->hash_algo);
       _gcry_module_release (module);
       goto ready;
     }
@@ -1035,7 +1038,7 @@ pkcs1_decode_for_encryption (unsigned char **r_result, size_t *r_resultlen,
   *r_resultlen = nframe - n;
 
   if (DBG_CIPHER)
-    log_printhex ("value extracted from PKCS#1 block type 2 encoded data:",
+    log_printhex ("value extracted from PKCS#1 block type 2 encoded data",
                   *r_result, *r_resultlen);
 
   return 0;
@@ -1478,7 +1481,7 @@ oaep_decode (unsigned char **r_result, size_t *r_resultlen,
   seed = NULL;
 
   if (DBG_CIPHER)
-    log_printhex ("value extracted from OAEP encoded data:",
+    log_printhex ("value extracted from OAEP encoded data",
                   *r_result, *r_resultlen);
 
   return 0;
@@ -1808,7 +1811,7 @@ pss_verify_cmp (void *opaque, gcry_mpi_t tmp)
 /* Internal function.   */
 static gcry_err_code_t
 sexp_elements_extract (gcry_sexp_t key_sexp, const char *element_names,
-		       gcry_mpi_t *elements, const char *algo_name)
+		       gcry_mpi_t *elements, const char *algo_name, int opaque)
 {
   gcry_err_code_t err = 0;
   int i, idx;
@@ -1820,6 +1823,13 @@ sexp_elements_extract (gcry_sexp_t key_sexp, const char *element_names,
       list = gcry_sexp_find_token (key_sexp, name, 1);
       if (!list)
 	elements[idx] = NULL;
+      else if (opaque)
+        {
+	  elements[idx] = _gcry_sexp_nth_opaque_mpi (list, 1);
+	  gcry_sexp_release (list);
+	  if (!elements[idx])
+	    err = GPG_ERR_INV_OBJ;
+        }
       else
 	{
 	  elements[idx] = gcry_sexp_nth_mpi (list, 1, GCRYMPI_FMT_USG);
@@ -1893,7 +1903,16 @@ sexp_elements_extract_ecc (gcry_sexp_t key_sexp, const char *element_names,
 	elements[idx] = NULL;
       else
 	{
-	  elements[idx] = gcry_sexp_nth_mpi (list, 1, GCRYMPI_FMT_USG);
+          switch (idx)
+            {
+            case 5: /* The public and */
+            case 6: /* the secret key must to be passed opaque.  */
+              elements[idx] = _gcry_sexp_nth_opaque_mpi (list, 1);
+              break;
+            default:
+              elements[idx] = gcry_sexp_nth_mpi (list, 1, GCRYMPI_FMT_STD);
+              break;
+            }
 	  gcry_sexp_release (list);
 	  if (!elements[idx])
             {
@@ -2096,7 +2115,7 @@ sexp_to_key (gcry_sexp_t sexp, int want_private, int use,
         err = sexp_elements_extract_ecc (list, elems, array, extraspec,
                                          want_private);
       else
-        err = sexp_elements_extract (list, elems, array, pubkey->name);
+        err = sexp_elements_extract (list, elems, array, pubkey->name, 0);
     }
 
   gcry_sexp_release (list);
@@ -2121,9 +2140,12 @@ sexp_to_key (gcry_sexp_t sexp, int want_private, int use,
 }
 
 
+/* Parse SEXP and store the elements into a newly allocated array of
+   MPIs which will be stored at RETARRAY.  If OPAQUE is set, store the
+   MPI as opaque data.  */
 static gcry_err_code_t
 sexp_to_sig (gcry_sexp_t sexp, gcry_mpi_t **retarray,
-	     gcry_module_t *retalgo)
+	     gcry_module_t *retalgo, int opaque)
 {
   gcry_err_code_t err = 0;
   gcry_sexp_t list, l2;
@@ -2187,7 +2209,7 @@ sexp_to_sig (gcry_sexp_t sexp, gcry_mpi_t **retarray,
     err = gpg_err_code_from_syserror ();
 
   if (!err)
-    err = sexp_elements_extract (list, elems, array, NULL);
+    err = sexp_elements_extract (list, elems, array, NULL, opaque);
 
   gcry_sexp_release (l2);
   gcry_sexp_release (list);
@@ -2449,7 +2471,7 @@ sexp_to_enc (gcry_sexp_t sexp, gcry_mpi_t **retarray, gcry_module_t *retalgo,
       goto leave;
     }
 
-  err = sexp_elements_extract (list, elems, array, NULL);
+  err = sexp_elements_extract (list, elems, array, NULL, 0);
 
  leave:
   gcry_sexp_release (list);
@@ -2484,7 +2506,7 @@ sexp_to_enc (gcry_sexp_t sexp, gcry_mpi_t **retarray, gcry_module_t *retalgo,
    (<mpi>)
    or
    (data
-    [(flags [raw, direct, pkcs1, oaep, pss, no-blinding, rfc6979])]
+    [(flags [raw, direct, pkcs1, oaep, pss, no-blinding, rfc6979, eddsa])]
     [(hash <algo> <value>)]
     [(value <text>)]
     [(hash-algo <algo>)]
@@ -2496,7 +2518,9 @@ sexp_to_enc (gcry_sexp_t sexp, gcry_mpi_t **retarray, gcry_module_t *retalgo,
    Either the VALUE or the HASH element must be present for use
    with signatures.  VALUE is used for encryption.
 
-   HASH-ALGO and LABEL are specific to OAEP.
+   HASH-ALGO is specific to OAEP and EDDSA.
+
+   LABEL is specific to OAEP.
 
    SALT-LENGTH is for PSS.
 
@@ -2533,8 +2557,13 @@ sexp_data_to_mpi (gcry_sexp_t input, gcry_mpi_t *ret_mpi,
             s = gcry_sexp_nth_data (lflags, i, &n);
             if (!s)
               ; /* not a data element*/
-	    else if (n == 7 && ! memcmp (s, "rfc6979", 7))
+	    else if (n == 7 && !memcmp (s, "rfc6979", 7))
 	      parsed_flags |= PUBKEY_FLAG_RFC6979;
+	    else if (n == 5 && !memcmp (s, "eddsa", 5))
+              {
+                ctx->encoding = PUBKEY_ENC_RAW;
+                parsed_flags |= PUBKEY_FLAG_EDDSA;
+              }
             else if ( n == 3 && !memcmp (s, "raw", 3)
                       && ctx->encoding == PUBKEY_ENC_UNKNOWN)
               {
@@ -2570,6 +2599,62 @@ sexp_data_to_mpi (gcry_sexp_t input, gcry_mpi_t *ret_mpi,
     rc = GPG_ERR_INV_OBJ; /* none or both given */
   else if (unknown_flag)
     rc = GPG_ERR_INV_FLAG;
+  else if (ctx->encoding == PUBKEY_ENC_RAW
+           && (parsed_flags & PUBKEY_FLAG_EDDSA))
+    {
+      /* Prepare for EdDSA.  */
+      gcry_sexp_t list;
+      void *value;
+      size_t valuelen;
+
+      if (!lvalue)
+        {
+          rc = GPG_ERR_INV_OBJ;
+          goto leave;
+        }
+      /* Get HASH-ALGO. */
+      list = gcry_sexp_find_token (ldata, "hash-algo", 0);
+      if (list)
+        {
+          s = gcry_sexp_nth_data (list, 1, &n);
+          if (!s)
+            rc = GPG_ERR_NO_OBJ;
+          else
+            {
+              ctx->hash_algo = get_hash_algo (s, n);
+              if (!ctx->hash_algo)
+                rc = GPG_ERR_DIGEST_ALGO;
+            }
+          gcry_sexp_release (list);
+        }
+      else
+        rc = GPG_ERR_INV_OBJ;
+      if (rc)
+        goto leave;
+
+      /* Get VALUE.  */
+      value = gcry_sexp_nth_buffer (lvalue, 1, &valuelen);
+      if (!value)
+        {
+          /* We assume that a zero length message is meant by
+             "(value)".  This is commonly used by test vectors.  Note
+             that S-expression do not allow zero length items. */
+          valuelen = 0;
+          value = gcry_malloc (1);
+          if (!value)
+            rc = gpg_err_code_from_syserror ();
+        }
+      else if ((valuelen * 8) < valuelen)
+        {
+          gcry_free (value);
+          rc = GPG_ERR_TOO_LARGE;
+        }
+      if (rc)
+        goto leave;
+
+      /* Note that mpi_set_opaque takes ownership of VALUE.  */
+      *ret_mpi = gcry_mpi_set_opaque (NULL, value, valuelen*8);
+    }
   else if (ctx->encoding == PUBKEY_ENC_RAW && lhash
            && (explicit_raw || (parsed_flags & PUBKEY_FLAG_RFC6979)))
     {
@@ -3387,10 +3472,17 @@ gcry_pk_verify (gcry_sexp_t s_sig, gcry_sexp_t s_hash, gcry_sexp_t s_pkey)
   if (rc)
     goto leave;
 
-  rc = sexp_to_sig (s_sig, &sig, &module_sig);
+  /* Get the stuff we want to verify. */
+  init_encoding_ctx (&ctx, PUBKEY_OP_VERIFY, gcry_pk_get_nbits (s_pkey));
+  rc = sexp_data_to_mpi (s_hash, &hash, &ctx);
   if (rc)
     goto leave;
 
+  /* Get the signature.  */
+  rc = sexp_to_sig (s_sig, &sig, &module_sig,
+                    !!(ctx.flags & PUBKEY_FLAG_EDDSA));
+  if (rc)
+    goto leave;
   /* Fixme: Check that the algorithm of S_SIG is compatible to the one
      of S_PKEY.  */
 
@@ -3400,14 +3492,7 @@ gcry_pk_verify (gcry_sexp_t s_sig, gcry_sexp_t s_hash, gcry_sexp_t s_pkey)
       goto leave;
     }
 
-  /* Get the stuff we want to verify. */
-  init_encoding_ctx (&ctx, PUBKEY_OP_VERIFY, gcry_pk_get_nbits (s_pkey));
-  rc = sexp_data_to_mpi (s_hash, &hash, &ctx);
-  if (rc)
-    goto leave;
-
-  rc = pubkey_verify (module_key->mod_id, hash, sig, pkey,
-		      ctx.verify_cmp, &ctx);
+  rc = pubkey_verify (module_key->mod_id, hash, sig, pkey, &ctx);
 
  leave:
   if (pkey)
@@ -3630,6 +3715,7 @@ gcry_pk_genkey (gcry_sexp_t *r_key, gcry_sexp_t s_parms)
     size_t nelem=0, nelem_cp = 0, needed=0;
     gcry_mpi_t mpis[30];
     int percent_s_idx = -1;
+    int percent_s_idx2 = -1;
 
     /* Estimate size of format string.  */
     nelem = strlen (pub_elems) + strlen (sec_elems);
@@ -3638,11 +3724,13 @@ gcry_pk_genkey (gcry_sexp_t *r_key, gcry_sexp_t s_parms)
         for (i = 0; factors[i]; i++)
           nelem++;
       }
+    if (extrainfo)
+      nelem += 2;
     nelem_cp = nelem;
 
     needed += nelem * 10;
-    /* (+5 is for EXTRAINFO ("%S")).  */
-    needed += 2 * strlen (algo_name) + 300 + 5;
+    /* (+10 for two times EXTRAINFO ("%S")).  */
+    needed += 2 * strlen (algo_name) + 300 + 10;
     if (nelem > DIM (mpis))
       BUG ();
 
@@ -3668,7 +3756,7 @@ gcry_pk_genkey (gcry_sexp_t *r_key, gcry_sexp_t s_parms)
       {
         /* Very ugly hack to insert the used curve parameter into the
            list of public key parameters.  */
-        percent_s_idx = nelem;
+        percent_s_idx = nelem++;
         p = stpcpy (p, "%S");
       }
     p = stpcpy (p, "))");
@@ -3681,15 +3769,24 @@ gcry_pk_genkey (gcry_sexp_t *r_key, gcry_sexp_t s_parms)
         p = stpcpy (p, "%m)");
         mpis[nelem++] = skey[i];
       }
+    if (extrainfo && (algo == GCRY_PK_ECDSA || algo == GCRY_PK_ECDH))
+      {
+        percent_s_idx2 = nelem++;
+        p = stpcpy (p, "%S");
+      }
     p = stpcpy (p, "))");
 
     /* Hack to make release_mpi_array() work.  */
     skey[i] = NULL;
 
-    if (extrainfo && percent_s_idx == -1)
+    if (extrainfo)
       {
         /* If we have extrainfo we should not have any factors.  */
-        p = stpcpy (p, "%S");
+        if (percent_s_idx == -1)
+          {
+            percent_s_idx = nelem++;
+            p = stpcpy (p, "%S");
+          }
       }
     else if (factors && factors[0])
       {
@@ -3711,8 +3808,12 @@ gcry_pk_genkey (gcry_sexp_t *r_key, gcry_sexp_t s_parms)
       int elem_n = strlen (pub_elems) + strlen (sec_elems);
       void **arg_list;
 
-      /* Allocate one extra for EXTRAINFO ("%S").  */
-      arg_list = gcry_calloc (nelem_cp+1, sizeof *arg_list);
+      if (percent_s_idx != -1)
+        elem_n++;
+      if (percent_s_idx2 != -1)
+        elem_n++;
+
+      arg_list = gcry_calloc (nelem_cp, sizeof *arg_list);
       if (!arg_list)
         {
           rc = gpg_err_code_from_syserror ();
@@ -3722,10 +3823,13 @@ gcry_pk_genkey (gcry_sexp_t *r_key, gcry_sexp_t s_parms)
         {
           if (i == percent_s_idx)
             arg_list[j++] = &extrainfo;
-          arg_list[j++] = mpis + i;
+          else if (i == percent_s_idx2)
+            arg_list[j++] = &extrainfo;
+          else
+            arg_list[j++] = mpis + i;
         }
-      if (extrainfo && percent_s_idx == -1)
-        arg_list[j] = &extrainfo;
+      if (extrainfo)
+        ;
       else if (factors && factors[0])
         {
           for (; i < nelem_cp; i++)

@@ -78,7 +78,7 @@ struct gcry_mpi
 #define MPI_NULL NULL
 
 #define mpi_get_nlimbs(a)     ((a)->nlimbs)
-#define mpi_is_neg(a)	      ((a)->sign)
+#define mpi_has_sign(a)	      ((a)->sign)
 
 /*-- mpiutil.c --*/
 
@@ -138,6 +138,12 @@ void _gcry_mpi_m_check( gcry_mpi_t a );
 void _gcry_mpi_swap( gcry_mpi_t a, gcry_mpi_t b);
 gcry_mpi_t _gcry_mpi_new (unsigned int nbits);
 gcry_mpi_t _gcry_mpi_snew (unsigned int nbits);
+gcry_mpi_t _gcry_mpi_set_opaque_copy (gcry_mpi_t a,
+                                      void *p, unsigned int nbits);
+void *_gcry_mpi_get_opaque_copy (gcry_mpi_t a, unsigned int *nbits);
+int _gcry_mpi_is_neg (gcry_mpi_t a);
+void _gcry_mpi_neg (gcry_mpi_t w, gcry_mpi_t u);
+void _gcry_mpi_abs (gcry_mpi_t w);
 
 /* Constants used to return constant MPIs.  See _gcry_mpi_init if you
    want to add more constants. */
@@ -159,12 +165,12 @@ gcry_mpi_t _gcry_mpi_const (enum gcry_mpi_constants no);
 /*-- mpicoder.c --*/
 void  _gcry_log_mpidump( const char *text, gcry_mpi_t a );
 u32   _gcry_mpi_get_keyid( gcry_mpi_t a, u32 *keyid );
-byte *_gcry_mpi_get_buffer( gcry_mpi_t a, unsigned *nbytes, int *sign );
-byte *_gcry_mpi_get_secure_buffer( gcry_mpi_t a, unsigned *nbytes, int *sign );
+byte *_gcry_mpi_get_buffer (gcry_mpi_t a, unsigned int fill_le,
+                            unsigned int *r_nbytes, int *sign);
+byte *_gcry_mpi_get_secure_buffer (gcry_mpi_t a, unsigned int fill_le,
+                                   unsigned *r_nbytes, int *sign);
 void  _gcry_mpi_set_buffer ( gcry_mpi_t a, const void *buffer,
                              unsigned int nbytes, int sign );
-
-#define log_mpidump _gcry_log_mpidump
 
 /*-- mpi-add.c --*/
 #define mpi_add_ui(w,u,v) gcry_mpi_add_ui((w),(u),(v))
@@ -276,12 +282,44 @@ void _gcry_mpi_get_point (gcry_mpi_t x, gcry_mpi_t y, gcry_mpi_t z,
 void _gcry_mpi_snatch_point (gcry_mpi_t x, gcry_mpi_t y, gcry_mpi_t z,
                              mpi_point_t point);
 
+
+/* Models describing an elliptic curve.  */
+enum gcry_mpi_ec_models
+  {
+
+    MPI_EC_WEIERSTRASS = 0,
+    MPI_EC_MONTGOMERY,
+    MPI_EC_TWISTEDEDWARDS
+    /* The equation for Twisted Edwards curves is
+          ax^2 + y^2 = 1 + bx^2y^2
+       Note that we use 'b' instead of the commonly used 'd'.  */
+  };
+
+/* Dialects used with elliptic curves.  It is easier to keep the
+   definition here than in ecc-common.h. */
+enum ecc_dialects
+  {
+    ECC_DIALECT_STANDARD = 0,
+    ECC_DIALECT_ED25519
+  };
+
+
 /* Context used with elliptic curve functions.  */
 struct mpi_ec_ctx_s;
 typedef struct mpi_ec_ctx_s *mpi_ec_t;
 
-mpi_ec_t _gcry_mpi_ec_p_internal_new (gcry_mpi_t p, gcry_mpi_t a);
+void _gcry_mpi_point_log (const char *name, mpi_point_t point, mpi_ec_t ctx);
+#define log_printpnt(a,p,c) _gcry_mpi_point_log ((a), (p), (c))
+
+mpi_ec_t _gcry_mpi_ec_p_internal_new (enum gcry_mpi_ec_models model,
+                                      enum ecc_dialects dialect,
+                                      gcry_mpi_t p, gcry_mpi_t a, gcry_mpi_t b);
+gpg_err_code_t _gcry_mpi_ec_p_new (gcry_ctx_t *r_ctx,
+                                   enum gcry_mpi_ec_models model,
+                                   enum ecc_dialects dialect,
+                                   gcry_mpi_t p, gcry_mpi_t a, gcry_mpi_t b);
 void _gcry_mpi_ec_free (mpi_ec_t ctx);
+
 int _gcry_mpi_ec_get_affine (gcry_mpi_t x, gcry_mpi_t y, mpi_point_t point,
                              mpi_ec_t ctx);
 void _gcry_mpi_ec_dup_point (mpi_point_t result,
@@ -292,11 +330,10 @@ void _gcry_mpi_ec_add_points (mpi_point_t result,
 void _gcry_mpi_ec_mul_point (mpi_point_t result,
                              gcry_mpi_t scalar, mpi_point_t point,
                              mpi_ec_t ctx);
+int  _gcry_mpi_ec_curve_point (gcry_mpi_point_t point, mpi_ec_t ctx);
 
 gcry_mpi_t _gcry_mpi_ec_ec2os (gcry_mpi_point_t point, mpi_ec_t ectx);
 
-gpg_err_code_t _gcry_mpi_ec_p_new (gcry_ctx_t *r_ctx,
-                                   gcry_mpi_t p, gcry_mpi_t a);
 gpg_err_code_t _gcry_mpi_ec_new (gcry_ctx_t *r_ctx,
                                  gcry_sexp_t keyparam, const char *curvename);
 gcry_mpi_t _gcry_mpi_ec_get_mpi (const char *name, gcry_ctx_t ctx, int copy);

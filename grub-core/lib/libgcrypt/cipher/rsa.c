@@ -662,7 +662,7 @@ stronger_key_check ( RSA_secret_key *skey )
       {
         log_info ( "RSA Oops: d is wrong - fixed\n");
         mpi_set (skey->d, t);
-        _gcry_log_mpidump ("  fixed d", skey->d);
+        log_printmpi ("  fixed d", skey->d);
       }
 
     /* check for correctness of u */
@@ -671,7 +671,7 @@ stronger_key_check ( RSA_secret_key *skey )
       {
         log_info ( "RSA Oops: u is wrong - fixed\n");
         mpi_set (skey->u, t);
-        _gcry_log_mpidump ("  fixed u", skey->u);
+        log_printmpi ("  fixed u", skey->u);
       }
 
     log_info ( "RSA secret key check finished\n");
@@ -722,7 +722,7 @@ secret (gcry_mpi_t output, gcry_mpi_t input, RSA_secret_key *skey )
       mpi_powm( m2, input, h, skey->q );
       /* h = u * ( m2 - m1 ) mod q */
       mpi_sub( h, m2, m1 );
-      if ( mpi_is_neg( h ) )
+      if ( mpi_has_sign ( h ) )
         mpi_add ( h, h, skey->q );
       mpi_mulm( h, skey->u, h, skey->q );
       /* m = m2 + h * p */
@@ -1020,8 +1020,8 @@ rsa_sign (int algo, gcry_mpi_t *resarr, gcry_mpi_t data, gcry_mpi_t *skey,
 
 static gcry_err_code_t
 rsa_verify (int algo, gcry_mpi_t hash, gcry_mpi_t *data, gcry_mpi_t *pkey,
-		  int (*cmp) (void *opaque, gcry_mpi_t tmp),
-		  void *opaquev)
+            int (*cmp) (void *opaque, gcry_mpi_t tmp), void *opaquev,
+            int flags, int hashalgo)
 {
   RSA_public_key pk;
   gcry_mpi_t result;
@@ -1030,6 +1030,8 @@ rsa_verify (int algo, gcry_mpi_t hash, gcry_mpi_t *data, gcry_mpi_t *pkey,
   (void)algo;
   (void)cmp;
   (void)opaquev;
+  (void)flags;
+  (void)hashalgo;
 
   if (mpi_is_opaque (hash))
     return GPG_ERR_INV_DATA;
@@ -1041,8 +1043,8 @@ rsa_verify (int algo, gcry_mpi_t hash, gcry_mpi_t *data, gcry_mpi_t *pkey,
 #ifdef IS_DEVELOPMENT_VERSION
   if (DBG_CIPHER)
     {
-      log_mpidump ("rsa verify result:", result );
-      log_mpidump ("             hash:", hash );
+      log_mpidump ("rsa verify result", result );
+      log_mpidump ("             hash", hash );
     }
 #endif /*IS_DEVELOPMENT_VERSION*/
   if (cmp)

@@ -1,5 +1,5 @@
-/* rmd.h - RIPE-MD hash functions
- *	Copyright (C) 1998, 2001, 2002 Free Software Foundation, Inc.
+/* gost.h - GOST 28147-89 implementation
+ * Copyright (C) 2012 Free Software Foundation, Inc.
  *
  * This file is part of Libgcrypt.
  *
@@ -14,22 +14,20 @@
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA
+ * License along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef G10_RMD_H
-#define G10_RMD_H
 
-#include "hash-common.h"
+#ifndef _GCRY_GOST_H
+#define _GCRY_GOST_H
 
-/* We need this here because random.c must have direct access. */
-typedef struct
-{
-  gcry_md_block_ctx_t bctx;
-  u32  h0,h1,h2,h3,h4;
-} RMD160_CONTEXT;
+typedef struct {
+  u32 subst[4][256];
+  u32 key[8];
+  int subst_set;
+} GOST28147_context;
 
-void _gcry_rmd160_init ( void *context );
-void _gcry_rmd160_mixblock ( RMD160_CONTEXT *hd, void *blockof64byte );
+/* This is a simple interface that will be used by GOST R 34.11-94 */
+extern void _gcry_gost_enc_one (GOST28147_context *c, const byte *key,
+    byte *out, byte *in);
 
-#endif /*G10_RMD_H*/
+#endif

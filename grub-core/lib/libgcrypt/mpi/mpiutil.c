@@ -276,7 +276,22 @@ gcry_mpi_set_opaque( gcry_mpi_t a, void *p, unsigned int nbits )
   a->nlimbs = 0;
   a->sign  = nbits;
   a->flags = 4;
+  if (gcry_is_secure (a->d))
+    a->flags |= 1;
   return a;
+}
+
+
+gcry_mpi_t
+_gcry_mpi_set_opaque_copy (gcry_mpi_t a, void *p, unsigned int nbits)
+{
+  void *d;
+  unsigned int n;
+
+  n = (nbits+7)/8;
+  d = gcry_is_secure (p)? gcry_malloc_secure (n) : gcry_malloc (n);
+  memcpy (d, p, n);
+  return gcry_mpi_set_opaque (a, d, nbits);
 }
 
 
@@ -290,6 +305,22 @@ gcry_mpi_get_opaque( gcry_mpi_t a, unsigned int *nbits )
     return a->d;
 }
 
+
+void *
+_gcry_mpi_get_opaque_copy (gcry_mpi_t a, unsigned int *nbits)
+{
+  const void *s;
+  void *d;
+  unsigned int n;
+
+  s = gcry_mpi_get_opaque (a, nbits);
+  if (!s && nbits)
+    return NULL;
+  n = (*nbits+7)/8;
+  d = gcry_is_secure (s)? gcry_malloc_secure (n) : gcry_malloc (n);
+  memcpy (d, s, n);
+  return d;
+}
 
 /****************
  * Note: This copy function should not interpret the MPI
@@ -321,6 +352,45 @@ gcry_mpi_copy( gcry_mpi_t a )
     else
 	b = NULL;
     return b;
+}
+
+
+/* Return true if A is negative.  */
+int
+_gcry_mpi_is_neg (gcry_mpi_t a)
+{
+  if (a->sign && _gcry_mpi_cmp_ui (a, 0))
+    return 1;
+  else
+    return 0;
+}
+
+
+/* W = - U */
+void
+_gcry_mpi_neg (gcry_mpi_t w, gcry_mpi_t u)
+{
+  if (mpi_is_immutable (w))
+    {
+      mpi_immutable_failed ();
+      return;
+    }
+
+  w->sign = !u->sign;
+}
+
+
+/* W = [W] */
+void
+_gcry_mpi_abs (gcry_mpi_t w)
+{
+  if (mpi_is_immutable (w))
+    {
+      mpi_immutable_failed ();
+      return;
+    }
+
+  w->sign = 0;
 }
 
 

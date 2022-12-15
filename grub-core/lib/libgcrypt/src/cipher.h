@@ -28,6 +28,7 @@
 
 #define PUBKEY_FLAG_NO_BLINDING    (1 << 0)
 #define PUBKEY_FLAG_RFC6979        (1 << 1)
+#define PUBKEY_FLAG_EDDSA          (1 << 2)
 
 enum pk_operation
   {
@@ -78,6 +79,8 @@ void _gcry_rmd160_hash_buffer (void *outbuf,
 /*-- sha1.c --*/
 void _gcry_sha1_hash_buffer (void *outbuf,
                              const void *buffer, size_t length);
+void _gcry_sha1_hash_buffers (void *outbuf,
+                              const gcry_buffer_t *iov, int iovcnt);
 
 /*-- rijndael.c --*/
 void _gcry_aes_cfb_enc (void *context, unsigned char *iv,
@@ -196,6 +199,8 @@ extern gcry_cipher_spec_t _gcry_cipher_spec_camellia192;
 extern gcry_cipher_spec_t _gcry_cipher_spec_camellia256;
 extern gcry_cipher_spec_t _gcry_cipher_spec_idea;
 extern gcry_cipher_spec_t _gcry_cipher_spec_salsa20;
+extern gcry_cipher_spec_t _gcry_cipher_spec_salsa20r12;
+extern gcry_cipher_spec_t _gcry_cipher_spec_gost28147;
 
 extern cipher_extra_spec_t _gcry_cipher_extraspec_tripledes;
 extern cipher_extra_spec_t _gcry_cipher_extraspec_aes;
@@ -207,6 +212,9 @@ extern cipher_extra_spec_t _gcry_cipher_extraspec_salsa20;
 extern gcry_md_spec_t _gcry_digest_spec_crc32;
 extern gcry_md_spec_t _gcry_digest_spec_crc32_rfc1510;
 extern gcry_md_spec_t _gcry_digest_spec_crc24_rfc2440;
+extern gcry_md_spec_t _gcry_digest_spec_gost3411_94;
+extern gcry_md_spec_t _gcry_digest_spec_stribog_256;
+extern gcry_md_spec_t _gcry_digest_spec_stribog_512;
 extern gcry_md_spec_t _gcry_digest_spec_md4;
 extern gcry_md_spec_t _gcry_digest_spec_md5;
 extern gcry_md_spec_t _gcry_digest_spec_rmd160;

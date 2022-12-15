@@ -176,75 +176,21 @@ mpi_fromstr (gcry_mpi_t val, const char *str)
 }
 
 
-/* Dump the value of A in a format suitable for debugging to
-   Libgcrypt's logging stream.  Note that one leading space but no
-   trailing space or linefeed will be printed.  It is okay to pass
-   NULL for A.  Note that this function prints the sign as it is used
-   internally and won't map -0 to 0. */
-void
-gcry_mpi_dump (const gcry_mpi_t a)
-{
-  int i;
-
-  log_printf (" ");
-  if (!a)
-    log_printf ("[MPI_NULL]");
-  else if (mpi_is_opaque (a))
-    {
-      unsigned int nbits;
-      const unsigned char *p;
-
-      p = gcry_mpi_get_opaque (a, &nbits);
-      log_printf ("[%u bit: ", nbits);
-      for (i=0; i < (nbits + 7)/8; i++)
-        log_printf ("%02x", p[i]);
-      log_printf ("]");
-    }
-  else
-    {
-      if (a->sign)
-        log_printf ( "-");
-#if BYTES_PER_MPI_LIMB == 2
-# define X "4"
-#elif BYTES_PER_MPI_LIMB == 4
-# define X "8"
-#elif BYTES_PER_MPI_LIMB == 8
-# define X "16"
-#elif BYTES_PER_MPI_LIMB == 16
-# define X "32"
-#else
-# error please define the format here
-#endif
-      for (i=a->nlimbs; i > 0 ; i-- )
-        {
-          log_printf (i != a->nlimbs? "%0" X "lX":"%lX", (ulong)a->d[i-1]);
-        }
-#undef X
-      if (!a->nlimbs)
-        log_printf ("0");
-    }
-}
-
-/* Convience function used internally. */
-void
-_gcry_log_mpidump (const char *text, gcry_mpi_t a)
-{
-  log_printf ("%s:", text);
-  gcry_mpi_dump (a);
-  log_printf ("\n");
-}
-
-
 /* Return an allocated buffer with the MPI (msb first).  NBYTES
-   receives the length of this buffer.  Caller must free the return
-   string.  This function returns an allocated buffer with NBYTES set
-   to zero if the value of A is zero.  If sign is not NULL, it will be
-   set to the sign of the A.  On error NULL is returned and ERRNO set
-   appropriately.  */
+   receives the length of this buffer.  If FILL_LE is not 0, the
+   returned value is stored as little endian and right padded with
+   zeroes so that the returned buffer has at least LILL_LE bytes.
+
+   Caller must free the return string.  This function returns an
+   allocated buffer with NBYTES set to zero if the value of A is zero.
+   If sign is not NULL, it will be set to the sign of the A.  On error
+   NULL is returned and ERRNO set appropriately.  */
 static unsigned char *
-do_get_buffer (gcry_mpi_t a, unsigned int *nbytes, int *sign, int force_secure)
+do_get_buffer (gcry_mpi_t a, unsigned int fill_le,
+               unsigned int *nbytes, int *sign, int force_secure)
 {
   unsigned char *p, *buffer;
+  unsigned int length, tmp;
   mpi_limb_t alimb;
   int i;
   size_t n;
@@ -254,6 +200,8 @@ do_get_buffer (gcry_mpi_t a, unsigned int *nbytes, int *sign, int force_secure)
 
   *nbytes = a->nlimbs * BYTES_PER_MPI_LIMB;
   n = *nbytes? *nbytes:1; /* Allocate at least one byte.  */
+  if (n < fill_le)
+    n = fill_le;
   p = buffer = (force_secure || mpi_is_secure(a))? gcry_malloc_secure (n)
 						 : gcry_malloc (n);
   if (!buffer)
@@ -281,6 +229,24 @@ do_get_buffer (gcry_mpi_t a, unsigned int *nbytes, int *sign, int force_secure)
 #endif
     }
 
+  if (fill_le)
+    {
+      length = *nbytes;
+      /* Reverse buffer and pad with zeroes.  */
+      for (i=0; i < length/2; i++)
+        {
+          tmp = buffer[i];
+          buffer[i] = buffer[length-1-i];
+          buffer[length-1-i] = tmp;
+        }
+      /* Pad with zeroes.  */
+      for (p = buffer + length; length < fill_le; length++)
+        *p++ = 0;
+      *nbytes = length;
+
+      return buffer;
+    }
+
   /* This is sub-optimal but we need to do the shift operation because
      the caller has to free the returned buffer.  */
   for (p=buffer; *nbytes && !*p; p++, --*nbytes)
@@ -292,15 +258,17 @@ do_get_buffer (gcry_mpi_t a, unsigned int *nbytes, int *sign, int force_secure)
 
 
 byte *
-_gcry_mpi_get_buffer (gcry_mpi_t a, unsigned int *nbytes, int *sign)
+_gcry_mpi_get_buffer (gcry_mpi_t a, unsigned int fill_le,
+                      unsigned int *r_nbytes, int *sign)
 {
-  return do_get_buffer (a, nbytes, sign, 0);
+  return do_get_buffer (a, fill_le, r_nbytes, sign, 0);
 }
 
 byte *
-_gcry_mpi_get_secure_buffer (gcry_mpi_t a, unsigned *nbytes, int *sign)
+_gcry_mpi_get_secure_buffer (gcry_mpi_t a, unsigned int fill_le,
+                             unsigned int *r_nbytes, int *sign)
 {
-  return do_get_buffer (a, nbytes, sign, 1);
+  return do_get_buffer (a, fill_le, r_nbytes, sign, 1);
 }
 
 
@@ -385,6 +353,65 @@ _gcry_mpi_set_buffer (gcry_mpi_t a, const void *buffer_arg,
 }
 
 
+static void
+onecompl (gcry_mpi_t a)
+{
+  mpi_ptr_t ap;
+  mpi_size_t n;
+  unsigned int i;
+  unsigned int nbits = mpi_get_nbits (a);
+
+  if (mpi_is_immutable (a))
+    {
+      mpi_immutable_failed ();
+      return;
+    }
+
+  mpi_normalize (a);
+  ap = a->d;
+  n = a->nlimbs;
+
+  for( i = 0; i < n; i++ )
+    ap[i] ^= (mpi_limb_t)(-1);
+
+  a->sign = 0;
+  mpi_clear_highbit (a, nbits-1);
+}
+
+
+/* Perform a two's complement operation on buffer P of size N bytes.  */
+static void
+twocompl (unsigned char *p, unsigned int n)
+{
+  int i;
+
+  for (i=n-1; i >= 0 && !p[i]; i--)
+    ;
+  if (i >= 0)
+    {
+      if ((p[i] & 0x01))
+        p[i] = (((p[i] ^ 0xfe) | 0x01) & 0xff);
+      else if ((p[i] & 0x02))
+        p[i] = (((p[i] ^ 0xfc) | 0x02) & 0xfe);
+      else if ((p[i] & 0x04))
+        p[i] = (((p[i] ^ 0xf8) | 0x04) & 0xfc);
+      else if ((p[i] & 0x08))
+        p[i] = (((p[i] ^ 0xf0) | 0x08) & 0xf8);
+      else if ((p[i] & 0x10))
+        p[i] = (((p[i] ^ 0xe0) | 0x10) & 0xf0);
+      else if ((p[i] & 0x20))
+        p[i] = (((p[i] ^ 0xc0) | 0x20) & 0xe0);
+      else if ((p[i] & 0x40))
+        p[i] = (((p[i] ^ 0x80) | 0x40) & 0xc0);
+      else
+        p[i] = 0x80;
+
+      for (i--; i >= 0; i--)
+        p[i] ^= 0xff;
+    }
+}
+
+
 /* Convert the external representation of an integer stored in BUFFER
    with a length of BUFLEN into a newly create MPI returned in
    RET_MPI.  If NBYTES is not NULL, it will receive the number of
@@ -412,15 +439,14 @@ gcry_mpi_scan (struct gcry_mpi **ret_mpi, enum gcry_mpi_format format,
                 : mpi_alloc ((len+BYTES_PER_MPI_LIMB-1)/BYTES_PER_MPI_LIMB);
       if (len)
         {
+          _gcry_mpi_set_buffer (a, s, len, 0);
           a->sign = !!(*s & 0x80);
           if (a->sign)
             {
-              /* FIXME: we have to convert from 2compl to magnitude format */
-              mpi_free (a);
-              return gcry_error (GPG_ERR_INTERNAL);
+              onecompl (a);
+              mpi_add_ui (a, a, 1);
+              a->sign = 1;
 	    }
-          else
-            _gcry_mpi_set_buffer (a, s, len, 0);
 	}
       if (ret_mpi)
         {
@@ -429,6 +455,8 @@ gcry_mpi_scan (struct gcry_mpi **ret_mpi, enum gcry_mpi_format format,
 	}
       else
         mpi_free(a);
+      if (nscanned)
+        *nscanned = len;
       return 0;
     }
   else if (format == GCRYMPI_FMT_USG)
@@ -446,6 +474,8 @@ gcry_mpi_scan (struct gcry_mpi **ret_mpi, enum gcry_mpi_format format,
 	}
       else
         mpi_free(a);
+      if (nscanned)
+        *nscanned = len;
       return 0;
     }
   else if (format == GCRYMPI_FMT_PGP)
@@ -490,14 +520,13 @@ gcry_mpi_scan (struct gcry_mpi **ret_mpi, enum gcry_mpi_format format,
       if (n)
         {
           a->sign = !!(*s & 0x80);
+          _gcry_mpi_set_buffer( a, s, n, 0 );
           if (a->sign)
             {
-              /* FIXME: we have to convert from 2compl to magnitude format */
-              mpi_free(a);
-              return gcry_error (GPG_ERR_INTERNAL);
+              onecompl (a);
+              mpi_add_ui (a, a, 1);
+              a->sign = 1;
 	    }
-          else
-            _gcry_mpi_set_buffer( a, s, n, 0 );
 	}
       if (nscanned)
         *nscanned = n+4;
@@ -529,6 +558,8 @@ gcry_mpi_scan (struct gcry_mpi **ret_mpi, enum gcry_mpi_format format,
 	}
       else
         mpi_free(a);
+      if (nscanned)
+        *nscanned = strlen ((const char*)buffer);
       return 0;
     }
   else
@@ -573,18 +604,25 @@ gcry_mpi_print (enum gcry_mpi_format format,
       int extra = 0;
       unsigned int n;
 
-      if (negative)
-        return gcry_error (GPG_ERR_INTERNAL); /* Can't handle it yet. */
-
-      tmp = _gcry_mpi_get_buffer (a, &n, NULL);
+      tmp = _gcry_mpi_get_buffer (a, 0, &n, NULL);
       if (!tmp)
         return gpg_error_from_syserror ();
 
-      /* If the high bit of the returned buffer is set, we need to
-         print an extra leading 0x00 so that the output is interpreted
-         as a positive number.  */
-      if (n && (*tmp & 0x80))
+      if (negative)
         {
+          twocompl (tmp, n);
+          if (!(*tmp & 0x80))
+            {
+              /* Need to extend the sign.  */
+              n++;
+              extra = 2;
+            }
+        }
+      else if (n && (*tmp & 0x80))
+        {
+          /* Positive but the high bit of the returned buffer is set.
+             Thus we need to print an extra leading 0x00 so that the
+             output is interpreted as a positive number.  */
           n++;
           extra = 1;
 	}
@@ -599,9 +637,11 @@ gcry_mpi_print (enum gcry_mpi_format format,
         {
           unsigned char *s = buffer;
 
-          if (extra)
+          if (extra == 1)
             *s++ = 0;
-          memcpy (s, tmp, n-extra);
+          else if (extra)
+            *s++ = 0xff;
+          memcpy (s, tmp, n-!!extra);
 	}
       gcry_free(tmp);
       *nwritten = n;
@@ -621,7 +661,7 @@ gcry_mpi_print (enum gcry_mpi_format format,
         {
           unsigned char *tmp;
 
-          tmp = _gcry_mpi_get_buffer (a, &n, NULL);
+          tmp = _gcry_mpi_get_buffer (a, 0, &n, NULL);
           if (!tmp)
             return gpg_error_from_syserror ();
           memcpy (buffer, tmp, n);
@@ -649,7 +689,7 @@ gcry_mpi_print (enum gcry_mpi_format format,
           s[0] = nbits >> 8;
           s[1] = nbits;
 
-          tmp = _gcry_mpi_get_buffer (a, &n, NULL);
+          tmp = _gcry_mpi_get_buffer (a, 0, &n, NULL);
           if (!tmp)
             return gpg_error_from_syserror ();
           memcpy (s+2, tmp, n);
@@ -664,13 +704,21 @@ gcry_mpi_print (enum gcry_mpi_format format,
       int extra = 0;
       unsigned int n;
 
-      if (negative)
-        return gcry_error (GPG_ERR_INTERNAL); /* Can't handle it yet.  */
-
-      tmp = _gcry_mpi_get_buffer (a, &n, NULL);
+      tmp = _gcry_mpi_get_buffer (a, 0, &n, NULL);
       if (!tmp)
         return gpg_error_from_syserror ();
-      if (n && (*tmp & 0x80))
+
+      if (negative)
+        {
+          twocompl (tmp, n);
+          if (!(*tmp & 0x80))
+            {
+              /* Need to extend the sign.  */
+              n++;
+              extra = 2;
+            }
+        }
+      else if (n && (*tmp & 0x80))
         {
           n++;
           extra=1;
@@ -690,10 +738,11 @@ gcry_mpi_print (enum gcry_mpi_format format,
           *s++ = n >> 16;
           *s++ = n >> 8;
           *s++ = n;
-          if (extra)
+          if (extra == 1)
             *s++ = 0;
-
-          memcpy (s, tmp, n-extra);
+          else if (extra)
+            *s++ = 0xff;
+          memcpy (s, tmp, n-!!extra);
 	}
       gcry_free (tmp);
       *nwritten = 4+n;
@@ -706,7 +755,7 @@ gcry_mpi_print (enum gcry_mpi_format format,
       int extra = 0;
       unsigned int n = 0;
 
-      tmp = _gcry_mpi_get_buffer (a, &n, NULL);
+      tmp = _gcry_mpi_get_buffer (a, 0, &n, NULL);
       if (!tmp)
         return gpg_error_from_syserror ();
       if (!n || (*tmp & 0x80))
@@ -773,6 +822,10 @@ gcry_mpi_aprint (enum gcry_mpi_format format,
   *buffer = mpi_is_secure(a) ? gcry_malloc_secure (n?n:1) : gcry_malloc (n?n:1);
   if (!*buffer)
     return gpg_error_from_syserror ();
+  /* If the returned buffer will have a length of 0, we nevertheless
+     allocated 1 byte (malloc needs it anyway) and store a 0.  */
+  if (!n)
+    **buffer = 0;
   rc = gcry_mpi_print( format, *buffer, n, &n, a );
   if (rc)
     {
