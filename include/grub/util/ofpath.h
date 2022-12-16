@@ -32,4 +32,13 @@ void find_file(char* filename, char* directory, struct ofpath_files_list_root* r
 
 char* of_find_fc_host(char* host_wwpn);
 
+char* nvme_get_syspath(const char *nvmedev);
+
+char* block_device_get_sysfs_path_and_link(const char *devicenode);
+
+char* xrealpath (const char *in);
+
+unsigned int of_path_get_nvme_nsid(const char* devname);
+
+
 #endif /* ! GRUB_OFPATH_MACHINE_UTIL_HEADER */

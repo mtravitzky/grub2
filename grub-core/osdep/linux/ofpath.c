@@ -209,7 +209,7 @@ find_obppath (const char *sysfs_path_orig)
     }
 }
 
-static char *
+char *
 xrealpath (const char *in)
 {
   char *out;
@@ -224,7 +224,7 @@ xrealpath (const char *in)
   return out;
 }
 
-static char *
+char *
 block_device_get_sysfs_path_and_link(const char *devicenode)
 {
   char *rpath;
@@ -535,7 +535,7 @@ of_path_get_nvme_nsid(const char* devname)
 
 }
 
-static char *
+char *
 nvme_get_syspath(const char *nvmedev)
 {
   char *sysfs_path, *controller_node;
