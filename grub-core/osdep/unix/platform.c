@@ -19,6 +19,7 @@
 #include <config.h>
 
 #include <grub/util/install.h>
+#include <grub/util/ofpath.h>
 #include <grub/emu/hostdisk.h>
 #include <grub/util/misc.h>
 #include <grub/misc.h>
@@ -129,6 +130,51 @@ grub_install_remove_efi_entries_by_distributor (const char *efi_distributor)
 
   free (line);
   return rc;
+}
+
+char *
+build_multi_boot_device(const char *install_device)
+{
+  char *sysfs_path;
+  char *nvme_ns;
+  unsigned int nsid;
+  char *ptr;
+  char *boot_device_string;
+  struct dirent *ep;
+  DIR *dp;
+
+  nvme_ns = strchr(install_device, 'n');
+  nsid = of_path_get_nvme_nsid(nvme_ns);
+  sysfs_path = nvme_get_syspath(nvme_ns);
+  strcat(sysfs_path, "/device");
+  sysfs_path = xrealpath(sysfs_path);
+
+  dp = opendir(sysfs_path);
+  ptr = boot_device_string = xmalloc (1000);
+
+  /* We cannot have a boot list with more than five entries */
+  while((ep = readdir(dp)) != NULL){
+    char *nvme_device;
+
+    if (grub_strstr(ep->d_name, "nvme")) {
+      nvme_device = xasprintf ("%s%s%x ",
+                get_ofpathname(ep->d_name),"/namespace@", nsid);
+      if ((strlen(boot_device_string) + strlen(nvme_device)) >= 200*5 - 1) {
+        grub_util_warn (_("More than five entries cannot be specified in the bootlist"));
+        free(nvme_device);
+        break;
+      }
+
+      strncpy(ptr, nvme_device, strlen(nvme_device));
+      ptr += strlen(nvme_device);
+      free(nvme_device);
+    }
+  }
+
+  *--ptr = '\0';
+  closedir(dp);
+
+  return boot_device_string;
 }
 
 int
@@ -242,6 +288,8 @@ grub_install_register_ieee1275 (int is_prep, const char *install_device,
 	}
       *ptr = '\0';
     }
+  else if (grub_strstr(install_device, "nvme"))
+	boot_device =  build_multi_boot_device(install_device);
   else
     boot_device = get_ofpathname (install_device);
 
