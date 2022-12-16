@@ -240,6 +240,9 @@ grub_install_register_efi (const grub_disk_t *efidir_grub_disk,
 			   const char *efi_distributor,
 			   const char *force_disk);
 
+char *
+build_multi_boot_device(const char *install_device);
+
 void
 grub_install_register_ieee1275 (int is_prep, const char *install_device,
 				int partno, const char *relpath);
