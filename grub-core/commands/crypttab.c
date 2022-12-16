@@ -11,7 +11,7 @@ static grub_err_t
 grub_cmd_crypttab_entry (grub_command_t cmd __attribute__ ((unused)),
 	       int argc, char **argv)
 {
-  char buf[64];
+  char buf[256];
   const char *path = NULL;
 
   if (argc == 2)
