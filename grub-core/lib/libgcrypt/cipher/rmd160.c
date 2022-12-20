@@ -28,6 +28,7 @@
 #include "cipher.h" /* Only used for the rmd160_hash_buffer() prototype. */
 
 #include "bithelp.h"
+#include "bufhelp.h"
 
 /*********************************
  * RIPEMD-160 is not patented, see (as of 25.10.97)
@@ -139,7 +140,7 @@
  * 1 million times "a"   52783243c1697bdbe16d37f97f68f08325dc1528
  */
 
-static void
+static unsigned int
 transform ( void *ctx, const unsigned char *data );
 
 void
@@ -152,10 +153,10 @@ _gcry_rmd160_init (void *context)
   hd->h2 = 0x98BADCFE;
   hd->h3 = 0x10325476;
   hd->h4 = 0xC3D2E1F0;
+
   hd->bctx.nblocks = 0;
   hd->bctx.count = 0;
   hd->bctx.blocksize = 64;
-  hd->bctx.stack_burn = 108+5*sizeof(void*);
   hd->bctx.bwrite = transform;
 }
 
@@ -164,38 +165,17 @@ _gcry_rmd160_init (void *context)
 /****************
  * Transform the message X which consists of 16 32-bit-words
  */
-static void
+static unsigned int
 transform ( void *ctx, const unsigned char *data )
 {
   RMD160_CONTEXT *hd = ctx;
   register u32 a,b,c,d,e;
   u32 aa,bb,cc,dd,ee,t;
-#ifdef WORDS_BIGENDIAN
   u32 x[16];
-  {
-    int i;
-    byte *p2;
-    const byte *p1;
-    for (i=0, p1=data, p2=(byte*)x; i < 16; i++, p2 += 4 )
-      {
-        p2[3] = *p1++;
-        p2[2] = *p1++;
-        p2[1] = *p1++;
-        p2[0] = *p1++;
-      }
-  }
-#else
-  /* This version is better because it is always aligned;
-   * The performance penalty on a 586-100 is about 6% which
-   * is acceptable - because the data is more local it might
-   * also be possible that this is faster on some machines.
-   * This function (when compiled with -02 on gcc 2.7.2)
-   * executes on a 586-100 (39.73 bogomips) at about 1900kb/sec;
-   * [measured with a 4MB data and "gpgm --print-md rmd160"] */
-  u32 x[16];
-  memcpy( x, data, 64 );
-#endif
+  int i;
 
+  for ( i = 0; i < 16; i++ )
+    x[i] = buf_get_le32(data + i * 4);
 
 #define K0  0x00000000
 #define K1  0x5A827999
@@ -400,6 +380,8 @@ transform ( void *ctx, const unsigned char *data )
   hd->h3 = hd->h4 + b + aa;
   hd->h4 = hd->h0 + c + bb;
   hd->h0 = t;
+
+  return /*burn_stack*/ 108+5*sizeof(void*);
 }
 
 
@@ -434,6 +416,7 @@ rmd160_final( void *context )
   RMD160_CONTEXT *hd = context;
   u32 t, msb, lsb;
   byte *p;
+  unsigned int burn;
 
   _gcry_md_block_write(hd, NULL, 0); /* flush */;
 
@@ -466,24 +449,13 @@ rmd160_final( void *context )
       memset(hd->bctx.buf, 0, 56 ); /* fill next block with zeroes */
     }
   /* append the 64 bit count */
-  hd->bctx.buf[56] = lsb	   ;
-  hd->bctx.buf[57] = lsb >>  8;
-  hd->bctx.buf[58] = lsb >> 16;
-  hd->bctx.buf[59] = lsb >> 24;
-  hd->bctx.buf[60] = msb	   ;
-  hd->bctx.buf[61] = msb >>  8;
-  hd->bctx.buf[62] = msb >> 16;
-  hd->bctx.buf[63] = msb >> 24;
-  transform( hd, hd->bctx.buf );
-  _gcry_burn_stack (108+5*sizeof(void*));
+  buf_put_le32(hd->bctx.buf + 56, lsb);
+  buf_put_le32(hd->bctx.buf + 60, msb);
+  burn = transform( hd, hd->bctx.buf );
+  _gcry_burn_stack (burn);
 
   p = hd->bctx.buf;
-#ifdef WORDS_BIGENDIAN
-#define X(a) do { *p++ = hd->h##a	   ; *p++ = hd->h##a >> 8;	\
-	          *p++ = hd->h##a >> 16; *p++ = hd->h##a >> 24; } while(0)
-#else /* little endian */
-#define X(a) do { *(u32*)p = hd->h##a ; p += 4; } while(0)
-#endif
+#define X(a) do { *(u32*)p = le_bswap32(hd->h##a) ; p += 4; } while(0)
   X(0);
   X(1);
   X(2);

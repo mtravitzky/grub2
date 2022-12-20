@@ -28,6 +28,8 @@
 #include "g10lib.h"
 #include "cipher.h"
 #include "hash-common.h"
+#include "bithelp.h"
+#include "bufhelp.h"
 
 /* We really need a 64 bit type for this code.  */
 #ifdef HAVE_U64_TYPEDEF
@@ -587,7 +589,7 @@ static u64 sbox4[256] = {
   U64_C(0xc83223f1720aef96) /* 1022 */, U64_C(0xc3a0396f7363a51f) /* 1023 */
 };
 
-static void
+static unsigned int
 transform ( void *ctx, const unsigned char *data );
 
 static void
@@ -598,10 +600,10 @@ do_init (void *context, int variant)
   hd->a = 0x0123456789abcdefLL;
   hd->b = 0xfedcba9876543210LL;
   hd->c = 0xf096a5b4c3b2e187LL;
+
   hd->bctx.nblocks = 0;
   hd->bctx.count = 0;
   hd->bctx.blocksize = 64;
-  hd->bctx.stack_burn = 21*8+11*sizeof(void*);
   hd->bctx.bwrite = transform;
   hd->variant = variant;
 }
@@ -691,30 +693,16 @@ key_schedule( u64 *x )
 /****************
  * Transform the message DATA which consists of 512 bytes (8 words)
  */
-static void
+static unsigned int
 transform ( void *ctx, const unsigned char *data )
 {
   TIGER_CONTEXT *hd = ctx;
   u64 a,b,c,aa,bb,cc;
   u64 x[8];
-#ifdef WORDS_BIGENDIAN
-#define MKWORD(d,n) \
-		(  ((u64)(d)[8*(n)+7]) << 56 | ((u64)(d)[8*(n)+6]) << 48  \
-		 | ((u64)(d)[8*(n)+5]) << 40 | ((u64)(d)[8*(n)+4]) << 32  \
-		 | ((u64)(d)[8*(n)+3]) << 24 | ((u64)(d)[8*(n)+2]) << 16  \
-		 | ((u64)(d)[8*(n)+1]) << 8  | ((u64)(d)[8*(n)	])	 )
-  x[0] = MKWORD(data, 0);
-  x[1] = MKWORD(data, 1);
-  x[2] = MKWORD(data, 2);
-  x[3] = MKWORD(data, 3);
-  x[4] = MKWORD(data, 4);
-  x[5] = MKWORD(data, 5);
-  x[6] = MKWORD(data, 6);
-  x[7] = MKWORD(data, 7);
-#undef MKWORD
-#else
-  memcpy( &x[0], data, 64 );
-#endif
+  int i;
+
+  for ( i = 0; i < 8; i++ )
+    x[i] = buf_get_le64(data + i * 8);
 
   /* save */
   a = aa = hd->a;
@@ -735,6 +723,8 @@ transform ( void *ctx, const unsigned char *data )
   hd->a = a;
   hd->b = b;
   hd->c = c;
+
+  return /*burn_stack*/ 21*8+11*sizeof(void*);
 }
 
 
@@ -747,6 +737,7 @@ tiger_final( void *context )
   TIGER_CONTEXT *hd = context;
   u32 t, msb, lsb;
   byte *p;
+  unsigned int burn;
   byte pad = hd->variant == 2? 0x80 : 0x01;
 
   _gcry_md_block_write(hd, NULL, 0); /* flush */;
@@ -780,30 +771,14 @@ tiger_final( void *context )
       memset(hd->bctx.buf, 0, 56 ); /* fill next block with zeroes */
     }
   /* append the 64 bit count */
-  hd->bctx.buf[56] = lsb	   ;
-  hd->bctx.buf[57] = lsb >>  8;
-  hd->bctx.buf[58] = lsb >> 16;
-  hd->bctx.buf[59] = lsb >> 24;
-  hd->bctx.buf[60] = msb	   ;
-  hd->bctx.buf[61] = msb >>  8;
-  hd->bctx.buf[62] = msb >> 16;
-  hd->bctx.buf[63] = msb >> 24;
-  transform( hd, hd->bctx.buf );
-  _gcry_burn_stack (21*8+11*sizeof(void*));
+  buf_put_le32(hd->bctx.buf + 56, lsb);
+  buf_put_le32(hd->bctx.buf + 60, msb);
+  burn = transform( hd, hd->bctx.buf );
+  _gcry_burn_stack (burn);
 
   p = hd->bctx.buf;
-#ifdef WORDS_BIGENDIAN
-#define X(a) do { *(u64*)p = hd->a ; p += 8; } while(0)
-#else /* little endian */
-#define X(a) do { *p++ = hd->a >> 56; *p++ = hd->a >> 48; \
-	          *p++ = hd->a >> 40; *p++ = hd->a >> 32; \
-	          *p++ = hd->a >> 24; *p++ = hd->a >> 16; \
-	          *p++ = hd->a >>  8; *p++ = hd->a;       } while(0)
-#endif
-#define Y(a) do { *p++ = hd->a      ; *p++ = hd->a >> 8;  \
-	          *p++ = hd->a >> 16; *p++ = hd->a >> 24; \
-	          *p++ = hd->a >> 32; *p++ = hd->a >> 40; \
-	          *p++ = hd->a >> 48; *p++ = hd->a >> 56; } while(0)
+#define X(a) do { *(u64*)p = be_bswap64(hd->a); p += 8; } while(0)
+#define Y(a) do { *(u64*)p = le_bswap64(hd->a); p += 8; } while(0)
   if (hd->variant == 0)
     {
       X(a);

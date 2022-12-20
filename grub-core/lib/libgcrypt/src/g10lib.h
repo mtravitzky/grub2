@@ -112,6 +112,8 @@ void _gcry_divide_by_zero (void) JNLIB_GCC_A_NR;
 
 const char *_gcry_gettext (const char *key) GCC_ATTR_FORMAT_ARG(1);
 void _gcry_fatal_error(int rc, const char *text ) JNLIB_GCC_A_NR;
+void _gcry_logv (int level,
+                 const char *fmt, va_list arg_ptr) JNLIB_GCC_A_PRINTF(2,0);
 void _gcry_log( int level, const char *fmt, ... ) JNLIB_GCC_A_PRINTF(2,3);
 void _gcry_log_bug( const char *fmt, ... )   JNLIB_GCC_A_NR_PRINTF(1,2);
 void _gcry_log_fatal( const char *fmt, ... ) JNLIB_GCC_A_NR_PRINTF(1,2);
@@ -123,6 +125,7 @@ void _gcry_log_debug( const char *fmt, ... ) JNLIB_GCC_A_PRINTF(1,2);
 void _gcry_log_printf ( const char *fmt, ... ) JNLIB_GCC_A_PRINTF(1,2);
 void _gcry_log_printhex (const char *text, const void *buffer, size_t length);
 void _gcry_log_printmpi (const char *text, gcry_mpi_t mpi);
+void _gcry_log_printsxp (const char *text, gcry_sexp_t sexp);
 
 void _gcry_set_log_verbosity( int level );
 int _gcry_log_verbosity( int level );
@@ -150,6 +153,7 @@ int _gcry_log_verbosity( int level );
 #define log_printf  _gcry_log_printf
 #define log_printhex _gcry_log_printhex
 #define log_printmpi _gcry_log_printmpi
+#define log_printsxp _gcry_log_printsxp
 
 /* Compatibility macro.  */
 #define log_mpidump _gcry_log_printmpi
@@ -344,8 +348,8 @@ void _gcry_burn_stack (unsigned int bytes);
 
 
 /*-- sexp.c --*/
-gcry_error_t _gcry_sexp_vbuild (gcry_sexp_t *retsexp, size_t *erroff,
-                                const char *format, va_list arg_ptr);
+gcry_err_code_t _gcry_sexp_vbuild (gcry_sexp_t *retsexp, size_t *erroff,
+                                   const char *format, va_list arg_ptr);
 gcry_mpi_t _gcry_sexp_nth_opaque_mpi (gcry_sexp_t list, int number);
 char *_gcry_sexp_nth_string (const gcry_sexp_t list, int number);
 

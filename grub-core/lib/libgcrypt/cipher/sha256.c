@@ -42,6 +42,7 @@
 
 #include "g10lib.h"
 #include "bithelp.h"
+#include "bufhelp.h"
 #include "cipher.h"
 #include "hash-common.h"
 
@@ -50,8 +51,9 @@ typedef struct {
   u32  h0,h1,h2,h3,h4,h5,h6,h7;
 } SHA256_CONTEXT;
 
-static void
+static unsigned int
 transform (void *c, const unsigned char *data);
+
 
 static void
 sha256_init (void *context)
@@ -70,7 +72,6 @@ sha256_init (void *context)
   hd->bctx.nblocks = 0;
   hd->bctx.count = 0;
   hd->bctx.blocksize = 64;
-  hd->bctx.stack_burn = 74*4+32;
   hd->bctx.bwrite = transform;
 }
 
@@ -92,7 +93,6 @@ sha224_init (void *context)
   hd->bctx.nblocks = 0;
   hd->bctx.count = 0;
   hd->bctx.blocksize = 64;
-  hd->bctx.stack_burn = 74*4+32;
   hd->bctx.bwrite = transform;
 }
 
@@ -145,7 +145,7 @@ Sum1 (u32 x)
 }
 
 
-static void
+static unsigned int
 transform (void *ctx, const unsigned char *data)
 {
   SHA256_CONTEXT *hd = ctx;
@@ -169,7 +169,6 @@ transform (void *ctx, const unsigned char *data)
   };
 
   u32 a,b,c,d,e,f,g,h,t1,t2;
-  u32 x[16];
   u32 w[64];
   int i;
 
@@ -182,24 +181,8 @@ transform (void *ctx, const unsigned char *data)
   g = hd->h6;
   h = hd->h7;
 
-#ifdef WORDS_BIGENDIAN
-  memcpy (x, data, 64);
-#else
-  {
-    byte *p2;
-
-    for (i=0, p2=(byte*)x; i < 16; i++, p2 += 4 )
-      {
-        p2[3] = *data++;
-        p2[2] = *data++;
-        p2[1] = *data++;
-        p2[0] = *data++;
-      }
-  }
-#endif
-
   for (i=0; i < 16; i++)
-    w[i] = x[i];
+    w[i] = buf_get_be32(data + i * 4);
   for (; i < 64; i++)
     w[i] = S1(w[i-2]) + w[i-7] + S0(w[i-15]) + w[i-16];
 
@@ -261,6 +244,8 @@ transform (void *ctx, const unsigned char *data)
   hd->h5 += f;
   hd->h6 += g;
   hd->h7 += h;
+
+  return /*burn_stack*/ 74*4+32;
 }
 #undef S0
 #undef S1
@@ -278,6 +263,7 @@ sha256_final(void *context)
   SHA256_CONTEXT *hd = context;
   u32 t, msb, lsb;
   byte *p;
+  unsigned int burn;
 
   _gcry_md_block_write (hd, NULL, 0); /* flush */;
 
@@ -310,24 +296,13 @@ sha256_final(void *context)
       memset (hd->bctx.buf, 0, 56 ); /* fill next block with zeroes */
     }
   /* append the 64 bit count */
-  hd->bctx.buf[56] = msb >> 24;
-  hd->bctx.buf[57] = msb >> 16;
-  hd->bctx.buf[58] = msb >>  8;
-  hd->bctx.buf[59] = msb;
-  hd->bctx.buf[60] = lsb >> 24;
-  hd->bctx.buf[61] = lsb >> 16;
-  hd->bctx.buf[62] = lsb >>  8;
-  hd->bctx.buf[63] = lsb;
-  transform (hd, hd->bctx.buf);
-  _gcry_burn_stack (74*4+32);
+  buf_put_be32(hd->bctx.buf + 56, msb);
+  buf_put_be32(hd->bctx.buf + 60, lsb);
+  burn = transform (hd, hd->bctx.buf);
+  _gcry_burn_stack (burn);
 
   p = hd->bctx.buf;
-#ifdef WORDS_BIGENDIAN
-#define X(a) do { *(u32*)p = hd->h##a ; p += 4; } while(0)
-#else /* little endian */
-#define X(a) do { *p++ = hd->h##a >> 24; *p++ = hd->h##a >> 16;	 \
-		  *p++ = hd->h##a >> 8; *p++ = hd->h##a; } while(0)
-#endif
+#define X(a) do { *(u32*)p = be_bswap32(hd->h##a); p += 4; } while(0)
   X(0);
   X(1);
   X(2);

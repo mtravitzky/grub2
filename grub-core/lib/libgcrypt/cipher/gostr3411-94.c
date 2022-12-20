@@ -30,6 +30,8 @@
 
 #include "gost.h"
 
+#define max(a, b) (((a) > (b)) ? (a) : (b))
+
 typedef struct {
   gcry_md_block_ctx_t bctx;
   GOST28147_context hd;
@@ -38,7 +40,7 @@ typedef struct {
   u32 len;
 } GOSTR3411_CONTEXT;
 
-static void
+static unsigned int
 transform (void *c, const unsigned char *data);
 
 static void
@@ -53,8 +55,6 @@ gost3411_init (void *context)
   hd->bctx.nblocks = 0;
   hd->bctx.count = 0;
   hd->bctx.blocksize = 32;
-  /* FIXME: Fix this arbitrary value for the stack_burn size.  -wk */
-  hd->bctx.stack_burn = 200;
   hd->bctx.bwrite = transform;
 }
 
@@ -150,11 +150,12 @@ do_add (unsigned char *s, unsigned char *a)
     }
 }
 
-static void
+static unsigned int
 do_hash_step (GOST28147_context *hd, unsigned char *h, unsigned char *m)
 {
   unsigned char u[32], v[32], s[32];
   unsigned char k[32];
+  unsigned int burn;
   int i;
 
   memcpy (u, h, 32);
@@ -163,7 +164,7 @@ do_hash_step (GOST28147_context *hd, unsigned char *h, unsigned char *m)
   for (i = 0; i < 4; i++) {
     do_p (k, u, v);
 
-    _gcry_gost_enc_one (hd, k, s + i*8, h + i*8);
+    burn = _gcry_gost_enc_one (hd, k, s + i*8, h + i*8);
 
     do_a (u);
     if (i == 1)
@@ -200,18 +201,27 @@ do_hash_step (GOST28147_context *hd, unsigned char *h, unsigned char *m)
 
   memcpy (h, s+20, 12);
   memcpy (h+12, s, 20);
+
+  return /* burn_stack */ 4 * sizeof(void*) /* func call (ret addr + args) */ +
+                          4 * 32 + 2 * sizeof(int) /* stack */ +
+                          max(burn /* _gcry_gost_enc_one */,
+                              sizeof(void*) * 2 /* do_a2 call */ +
+                              16 + sizeof(int) /* do_a2 stack */ );
 }
 
 
-static void
+static unsigned int
 transform (void *ctx, const unsigned char *data)
 {
   GOSTR3411_CONTEXT *hd = ctx;
   byte m[32];
+  unsigned int burn;
 
   memcpy (m, data, 32);
-  do_hash_step (&hd->hd, hd->h, m);
+  burn = do_hash_step (&hd->hd, hd->h, m);
   do_add (hd->sigma, m);
+
+  return /* burn_stack */ burn + 3 * sizeof(void*) + 32 + 2 * sizeof(void*);
 }
 
 /*
@@ -267,7 +277,7 @@ gost3411_read (void *context)
 }
 gcry_md_spec_t _gcry_digest_spec_gost3411_94 =
   {
-    "GOST_R_34.11-94", NULL, 0, NULL, 32,
+    "GOSTR3411_94", NULL, 0, NULL, 32,
     gost3411_init, _gcry_md_block_write, gost3411_final, gost3411_read,
     sizeof (GOSTR3411_CONTEXT)
   };

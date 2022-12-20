@@ -132,23 +132,6 @@ point_set (mpi_point_t d, mpi_point_t s)
 }
 
 
-/* Return a copy of POINT.  */
-static gcry_mpi_point_t
-point_copy (gcry_mpi_point_t point)
-{
-  gcry_mpi_point_t newpoint;
-
-  if (point)
-    {
-      newpoint = gcry_mpi_point_new (0);
-      point_set (newpoint, point);
-    }
-  else
-    newpoint = NULL;
-  return newpoint;
-}
-
-
 /* Set the projective coordinates from POINT into X, Y, and Z.  If a
    coordinate is not required, X, Y, or Z may be passed as NULL.  */
 void
@@ -367,8 +350,21 @@ ec_powm (gcry_mpi_t w, const gcry_mpi_t b, const gcry_mpi_t e,
          mpi_ec_t ctx)
 {
   mpi_powm (w, b, e, ctx->p);
-  _gcry_mpi_abs (w);
+  /* _gcry_mpi_abs (w); */
 }
+
+
+/* Shortcut for
+     ec_powm (B, B, mpi_const (MPI_C_TWO), ctx);
+   for easier optimization.  */
+static void
+ec_pow2 (gcry_mpi_t w, const gcry_mpi_t b, mpi_ec_t ctx)
+{
+  /* Using mpi_mul is slightly faster (at least on amd64).  */
+  /* mpi_powm (w, b, mpi_const (MPI_C_TWO), ctx->p); */
+  mpi_mulm (w, b, b, ctx->p);
+}
+
 
 static void
 ec_invm (gcry_mpi_t x, gcry_mpi_t a, mpi_ec_t ctx)
@@ -383,8 +379,8 @@ ec_invm (gcry_mpi_t x, gcry_mpi_t a, mpi_ec_t ctx)
 
 
 /* Force recomputation of all helper variables.  */
-static void
-ec_get_reset (mpi_ec_t ec)
+void
+_gcry_mpi_ec_get_reset (mpi_ec_t ec)
 {
   ec->t.valid.a_is_pminus3 = 0;
   ec->t.valid.two_inv_p = 0;
@@ -440,12 +436,16 @@ ec_p_init (mpi_ec_t ctx, enum gcry_mpi_ec_models model,
 
   ctx->model = model;
   ctx->dialect = dialect;
+  if (dialect == ECC_DIALECT_ED25519)
+    ctx->nbits = 256;
+  else
+    ctx->nbits = mpi_get_nbits (p);
   ctx->p = mpi_copy (p);
   ctx->a = mpi_copy (a);
   if (b && model == MPI_EC_TWISTEDEDWARDS)
     ctx->b = mpi_copy (b);
 
-  ec_get_reset (ctx);
+  _gcry_mpi_ec_get_reset (ctx);
 
   /* Allocate scratch variables.  */
   for (i=0; i< DIM(ctx->t.scratch); i++)
@@ -577,44 +577,7 @@ _gcry_mpi_ec_get_mpi (const char *name, gcry_ctx_t ctx, int copy)
 {
   mpi_ec_t ec = _gcry_ctx_get_pointer (ctx, CONTEXT_TYPE_EC);
 
-  if (!strcmp (name, "p") && ec->p)
-    return mpi_is_const (ec->p) && !copy? ec->p : mpi_copy (ec->p);
-  if (!strcmp (name, "a") && ec->a)
-    return mpi_is_const (ec->a) && !copy? ec->a : mpi_copy (ec->a);
-  if (!strcmp (name, "b") && ec->b)
-    return mpi_is_const (ec->b) && !copy? ec->b : mpi_copy (ec->b);
-  if (!strcmp (name, "n") && ec->n)
-    return mpi_is_const (ec->n) && !copy? ec->n : mpi_copy (ec->n);
-  if (!strcmp (name, "d") && ec->d)
-    return mpi_is_const (ec->d) && !copy? ec->d : mpi_copy (ec->d);
-
-  /* Return a requested point coordinate.  */
-  if (!strcmp (name, "g.x") && ec->G && ec->G->x)
-    return mpi_is_const (ec->G->x) && !copy? ec->G->x : mpi_copy (ec->G->x);
-  if (!strcmp (name, "g.y") && ec->G && ec->G->y)
-    return mpi_is_const (ec->G->y) && !copy? ec->G->y : mpi_copy (ec->G->y);
-  if (!strcmp (name, "q.x") && ec->Q && ec->Q->x)
-    return mpi_is_const (ec->Q->x) && !copy? ec->Q->x : mpi_copy (ec->Q->x);
-  if (!strcmp (name, "q.y") && ec->Q && ec->Q->y)
-    return mpi_is_const (ec->G->y) && !copy? ec->Q->y : mpi_copy (ec->Q->y);
-
-  /* If a point has been requested, return it in standard encoding.  */
-  if (!strcmp (name, "g") && ec->G)
-    return _gcry_mpi_ec_ec2os (ec->G, ec);
-  if (!strcmp (name, "q"))
-    {
-      /* If only the private key is given, compute the public key.  */
-      if (!ec->Q && ec->d && ec->G && ec->p && ec->a)
-        {
-          ec->Q = gcry_mpi_point_new (0);
-          _gcry_mpi_ec_mul_point (ec->Q, ec->d, ec->G, ec);
-        }
-
-      if (ec->Q)
-        return _gcry_mpi_ec_ec2os (ec->Q, ec);
-    }
-
-  return NULL;
+  return _gcry_ecc_get_mpi (name, ec, copy);
 }
 
 
@@ -625,22 +588,7 @@ _gcry_mpi_ec_get_point (const char *name, gcry_ctx_t ctx, int copy)
 
   (void)copy;  /* Not used.  */
 
-  if (!strcmp (name, "g") && ec->G)
-    return point_copy (ec->G);
-  if (!strcmp (name, "q"))
-    {
-      /* If only the private key is given, compute the public key.  */
-      if (!ec->Q && ec->d && ec->G && ec->p && ec->a)
-        {
-          ec->Q = gcry_mpi_point_new (0);
-          _gcry_mpi_ec_mul_point (ec->Q, ec->d, ec->G, ec);
-        }
-
-      if (ec->Q)
-        return point_copy (ec->Q);
-    }
-
-  return NULL;
+  return _gcry_ecc_get_point (name, ec);
 }
 
 
@@ -650,37 +598,7 @@ _gcry_mpi_ec_set_mpi (const char *name, gcry_mpi_t newvalue,
 {
   mpi_ec_t ec = _gcry_ctx_get_pointer (ctx, CONTEXT_TYPE_EC);
 
-  if (!strcmp (name, "p"))
-    {
-      mpi_free (ec->p);
-      ec->p = mpi_copy (newvalue);
-      ec_get_reset (ec);
-    }
-  else if (!strcmp (name, "a"))
-    {
-      mpi_free (ec->a);
-      ec->a = mpi_copy (newvalue);
-      ec_get_reset (ec);
-    }
-  else if (!strcmp (name, "b"))
-    {
-      mpi_free (ec->b);
-      ec->b = mpi_copy (newvalue);
-    }
-  else if (!strcmp (name, "n"))
-    {
-      mpi_free (ec->n);
-      ec->n = mpi_copy (newvalue);
-    }
-  else if (!strcmp (name, "d"))
-    {
-      mpi_free (ec->d);
-      ec->d = mpi_copy (newvalue);
-    }
-  else
-    return GPG_ERR_UNKNOWN_NAME;
-
-  return 0;
+  return _gcry_ecc_set_mpi (name, newvalue, ec);
 }
 
 
@@ -690,20 +608,7 @@ _gcry_mpi_ec_set_point (const char *name, gcry_mpi_point_t newvalue,
 {
   mpi_ec_t ec = _gcry_ctx_get_pointer (ctx, CONTEXT_TYPE_EC);
 
-  if (!strcmp (name, "g"))
-    {
-      gcry_mpi_point_release (ec->G);
-      ec->G = point_copy (newvalue);
-    }
-  else if (!strcmp (name, "q"))
-    {
-      gcry_mpi_point_release (ec->Q);
-      ec->Q = point_copy (newvalue);
-    }
-  else
-    return GPG_ERR_UNKNOWN_NAME;
-
-  return 0;
+  return _gcry_ecc_set_point (name, newvalue, ec);
 }
 
 
@@ -803,7 +708,7 @@ dup_point_weierstrass (mpi_point_t result, mpi_point_t point, mpi_ec_t ctx)
           /* L1 = 3(X - Z^2)(X + Z^2) */
           /*                          T1: used for Z^2. */
           /*                          T2: used for the right term.  */
-          ec_powm (t1, point->z, mpi_const (MPI_C_TWO), ctx);
+          ec_pow2 (t1, point->z, ctx);
           ec_subm (l1, point->x, t1, ctx);
           ec_mulm (l1, l1, mpi_const (MPI_C_THREE), ctx);
           ec_addm (t2, point->x, t1, ctx);
@@ -813,7 +718,7 @@ dup_point_weierstrass (mpi_point_t result, mpi_point_t point, mpi_ec_t ctx)
         {
           /* L1 = 3X^2 + aZ^4 */
           /*                          T1: used for aZ^4. */
-          ec_powm (l1, point->x, mpi_const (MPI_C_TWO), ctx);
+          ec_pow2 (l1, point->x, ctx);
           ec_mulm (l1, l1, mpi_const (MPI_C_THREE), ctx);
           ec_powm (t1, point->z, mpi_const (MPI_C_FOUR), ctx);
           ec_mulm (t1, t1, ctx->a, ctx);
@@ -825,19 +730,19 @@ dup_point_weierstrass (mpi_point_t result, mpi_point_t point, mpi_ec_t ctx)
 
       /* L2 = 4XY^2 */
       /*                              T2: used for Y2; required later. */
-      ec_powm (t2, point->y, mpi_const (MPI_C_TWO), ctx);
+      ec_pow2 (t2, point->y, ctx);
       ec_mulm (l2, t2, point->x, ctx);
       ec_mulm (l2, l2, mpi_const (MPI_C_FOUR), ctx);
 
       /* X3 = L1^2 - 2L2 */
       /*                              T1: used for L2^2. */
-      ec_powm (x3, l1, mpi_const (MPI_C_TWO), ctx);
+      ec_pow2 (x3, l1, ctx);
       ec_mulm (t1, l2, mpi_const (MPI_C_TWO), ctx);
       ec_subm (x3, x3, t1, ctx);
 
       /* L3 = 8Y^4 */
       /*                              T2: taken from above. */
-      ec_powm (t2, t2, mpi_const (MPI_C_TWO), ctx);
+      ec_pow2 (t2, t2, ctx);
       ec_mulm (l3, t2, mpi_const (MPI_C_EIGHT), ctx);
 
       /* Y3 = L1(L2 - X3) - L3 */
@@ -892,12 +797,12 @@ dup_point_twistededwards (mpi_point_t result, mpi_point_t point, mpi_ec_t ctx)
 
   /* B = (X_1 + Y_1)^2  */
   ec_addm (B, X1, Y1, ctx);
-  ec_powm (B, B, mpi_const (MPI_C_TWO), ctx);
+  ec_pow2 (B, B, ctx);
 
   /* C = X_1^2 */
   /* D = Y_1^2 */
-  ec_powm (C, X1, mpi_const (MPI_C_TWO), ctx);
-  ec_powm (D, Y1, mpi_const (MPI_C_TWO), ctx);
+  ec_pow2 (C, X1, ctx);
+  ec_pow2 (D, Y1, ctx);
 
   /* E = aC */
   ec_mulm (E, ctx->a, C, ctx);
@@ -906,7 +811,7 @@ dup_point_twistededwards (mpi_point_t result, mpi_point_t point, mpi_ec_t ctx)
   ec_addm (F, E, D, ctx);
 
   /* H = Z_1^2 */
-  ec_powm (H, Z1, mpi_const (MPI_C_TWO), ctx);
+  ec_pow2 (H, Z1, ctx);
 
   /* J = F - 2H */
   ec_mulm (J, H, mpi_const (MPI_C_TWO), ctx);
@@ -1016,14 +921,14 @@ add_points_weierstrass (mpi_point_t result,
         mpi_set (l1, x1);
       else
         {
-          ec_powm (l1, z2, mpi_const (MPI_C_TWO), ctx);
+          ec_pow2 (l1, z2, ctx);
           ec_mulm (l1, l1, x1, ctx);
         }
       if (z1_is_one)
         mpi_set (l2, x2);
       else
         {
-          ec_powm (l2, z1, mpi_const (MPI_C_TWO), ctx);
+          ec_pow2 (l2, z1, ctx);
           ec_mulm (l2, l2, x2, ctx);
         }
       /* l3 = l1 - l2 */
@@ -1062,8 +967,8 @@ add_points_weierstrass (mpi_point_t result,
           ec_mulm (z3, z1, z2, ctx);
           ec_mulm (z3, z3, l3, ctx);
           /* x3 = l6^2 - l7 l3^2  */
-          ec_powm (t1, l6, mpi_const (MPI_C_TWO), ctx);
-          ec_powm (t2, l3, mpi_const (MPI_C_TWO), ctx);
+          ec_pow2 (t1, l6, ctx);
+          ec_pow2 (t2, l3, ctx);
           ec_mulm (t2, t2, l7, ctx);
           ec_subm (x3, t1, t2, ctx);
           /* l9 = l7 l3^2 - 2 x3  */
@@ -1146,7 +1051,7 @@ add_points_twistededwards (mpi_point_t result,
   ec_mulm (A, Z1, Z2, ctx);
 
   /* B = A^2 */
-  ec_powm (B, A, mpi_const (MPI_C_TWO), ctx);
+  ec_pow2 (B, A, ctx);
 
   /* C = X1 · X2 */
   ec_mulm (C, X1, X2, ctx);
@@ -1369,8 +1274,8 @@ _gcry_mpi_ec_curve_point (gcry_mpi_point_t point, mpi_ec_t ctx)
     case MPI_EC_TWISTEDEDWARDS:
       {
         /* a · x^2 + y^2 - 1 - b · x^2 · y^2 == 0 */
-        ec_powm (x, x, mpi_const (MPI_C_TWO), ctx);
-        ec_powm (y, y, mpi_const (MPI_C_TWO), ctx);
+        ec_pow2 (x, x, ctx);
+        ec_pow2 (y, y, ctx);
         ec_mulm (w, ctx->a, x, ctx);
         ec_addm (w, w, y, ctx);
         ec_subm (w, w, mpi_const (MPI_C_ONE), ctx);

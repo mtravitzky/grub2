@@ -29,6 +29,8 @@
 #define PUBKEY_FLAG_NO_BLINDING    (1 << 0)
 #define PUBKEY_FLAG_RFC6979        (1 << 1)
 #define PUBKEY_FLAG_EDDSA          (1 << 2)
+#define PUBKEY_FLAG_FIXEDLEN       (1 << 3)
+#define PUBKEY_FLAG_LEGACYRESULT   (1 << 4)
 
 enum pk_operation
   {
@@ -176,7 +178,6 @@ void _gcry_register_primegen_progress (gcry_handler_progress_t cb,
                                        void *cb_data);
 
 /*-- pubkey.c --*/
-const char * _gcry_pk_aliased_algo_name (int algorithm);
 
 /* Declarations for the cipher specifications.  */
 extern gcry_cipher_spec_t _gcry_cipher_spec_blowfish;
@@ -237,14 +238,9 @@ extern md_extra_spec_t _gcry_digest_extraspec_sha512;
 /* Declarations for the pubkey cipher specifications.  */
 extern gcry_pk_spec_t _gcry_pubkey_spec_rsa;
 extern gcry_pk_spec_t _gcry_pubkey_spec_elg;
+extern gcry_pk_spec_t _gcry_pubkey_spec_elg_e;
 extern gcry_pk_spec_t _gcry_pubkey_spec_dsa;
-extern gcry_pk_spec_t _gcry_pubkey_spec_ecdsa;
-extern gcry_pk_spec_t _gcry_pubkey_spec_ecdh;
-
-extern pk_extra_spec_t _gcry_pubkey_extraspec_rsa;
-extern pk_extra_spec_t _gcry_pubkey_extraspec_dsa;
-extern pk_extra_spec_t _gcry_pubkey_extraspec_elg;
-extern pk_extra_spec_t _gcry_pubkey_extraspec_ecdsa;
+extern gcry_pk_spec_t _gcry_pubkey_spec_ecc;
 
 
 #endif /*G10_CIPHER_H*/

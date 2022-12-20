@@ -27,6 +27,8 @@ struct mpi_ec_ctx_s
 
   enum ecc_dialects dialect;     /* The ECC dialect used with the curve.  */
 
+  unsigned int nbits;            /* Number of bits.  */
+
   /* Domain parameters.  Note that they may not all be set and if set
      the MPIs may be flaged as constant. */
   gcry_mpi_t p;         /* Prime specifying the field GF(p).  */
@@ -61,6 +63,21 @@ struct mpi_ec_ctx_s
   } t;
 };
 
+
+/*-- mpi/ec.c --*/
+void _gcry_mpi_ec_get_reset (mpi_ec_t ec);
+
+
+/*-- cipher/ecc-curves.c --*/
+gpg_err_code_t   _gcry_mpi_ec_new (gcry_ctx_t *r_ctx,
+                                   gcry_sexp_t keyparam, const char *curvename);
+
+gcry_mpi_t       _gcry_ecc_get_mpi (const char *name, mpi_ec_t ec, int copy);
+gcry_mpi_point_t _gcry_ecc_get_point (const char *name, mpi_ec_t ec);
+gpg_err_code_t   _gcry_ecc_set_mpi (const char *name,
+                                    gcry_mpi_t newvalue, mpi_ec_t ec);
+gpg_err_code_t   _gcry_ecc_set_point (const char *name,
+                                      gcry_mpi_point_t newvalue, mpi_ec_t ec);
 
 
 #endif /*GCRY_EC_CONTEXT_H*/

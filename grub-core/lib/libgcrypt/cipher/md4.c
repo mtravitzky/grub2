@@ -56,6 +56,7 @@
 #include "cipher.h"
 
 #include "bithelp.h"
+#include "bufhelp.h"
 #include "hash-common.h"
 
 
@@ -64,7 +65,7 @@ typedef struct {
     u32 A,B,C,D;	  /* chaining variables */
 } MD4_CONTEXT;
 
-static void
+static unsigned int
 transform ( void *c, const unsigned char *data );
 
 static void
@@ -80,7 +81,6 @@ md4_init( void *context )
   ctx->bctx.nblocks = 0;
   ctx->bctx.count = 0;
   ctx->bctx.blocksize = 64;
-  ctx->bctx.stack_burn = 80+6*sizeof(void*);
   ctx->bctx.bwrite = transform;
 }
 
@@ -92,7 +92,7 @@ md4_init( void *context )
 /****************
  * transform 64 bytes
  */
-static void
+static unsigned int
 transform ( void *c, const unsigned char *data )
 {
   MD4_CONTEXT *ctx = c;
@@ -101,23 +101,10 @@ transform ( void *c, const unsigned char *data )
   register u32 B = ctx->B;
   register u32 C = ctx->C;
   register u32 D = ctx->D;
+  int i;
 
-#ifdef WORDS_BIGENDIAN
-  {
-    int i;
-    byte *p2;
-    const byte *p1;
-    for(i=0, p1=data, p2=(byte*)in; i < 16; i++, p2 += 4 )
-      {
-	p2[3] = *p1++;
-	p2[2] = *p1++;
-	p2[1] = *p1++;
-	p2[0] = *p1++;
-      }
-  }
-#else
-  memcpy (in, data, 64);
-#endif
+  for ( i = 0; i < 16; i++ )
+    in[i] = buf_get_le32(data + i * 4);
 
   /* Round 1.  */
 #define function(a,b,c,d,k,s) a=rol(a+F(b,c,d)+in[k],s);
@@ -188,6 +175,8 @@ transform ( void *c, const unsigned char *data )
   ctx->B += B;
   ctx->C += C;
   ctx->D += D;
+
+  return /*burn_stack*/ 80+6*sizeof(void*);
 }
 
 
@@ -204,6 +193,7 @@ md4_final( void *context )
   MD4_CONTEXT *hd = context;
   u32 t, msb, lsb;
   byte *p;
+  unsigned int burn;
 
   _gcry_md_block_write(hd, NULL, 0); /* flush */;
 
@@ -236,24 +226,13 @@ md4_final( void *context )
       memset(hd->bctx.buf, 0, 56 ); /* fill next block with zeroes */
     }
   /* append the 64 bit count */
-  hd->bctx.buf[56] = lsb	   ;
-  hd->bctx.buf[57] = lsb >>  8;
-  hd->bctx.buf[58] = lsb >> 16;
-  hd->bctx.buf[59] = lsb >> 24;
-  hd->bctx.buf[60] = msb	   ;
-  hd->bctx.buf[61] = msb >>  8;
-  hd->bctx.buf[62] = msb >> 16;
-  hd->bctx.buf[63] = msb >> 24;
-  transform( hd, hd->bctx.buf );
-  _gcry_burn_stack (80+6*sizeof(void*));
+  buf_put_le32(hd->bctx.buf + 56, lsb);
+  buf_put_le32(hd->bctx.buf + 60, msb);
+  burn = transform( hd, hd->bctx.buf );
+  _gcry_burn_stack (burn);
 
   p = hd->bctx.buf;
-#ifdef WORDS_BIGENDIAN
-#define X(a) do { *p++ = hd->a      ; *p++ = hd->a >> 8;      \
-		  *p++ = hd->a >> 16; *p++ = hd->a >> 24; } while(0)
-#else /* little endian */
-#define X(a) do { *(u32*)p = (*hd).a ; p += 4; } while(0)
-#endif
+#define X(a) do { *(u32*)p = le_bswap32((*hd).a) ; p += 4; } while(0)
   X(A);
   X(B);
   X(C);

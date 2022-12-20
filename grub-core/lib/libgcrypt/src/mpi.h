@@ -139,7 +139,7 @@ void _gcry_mpi_swap( gcry_mpi_t a, gcry_mpi_t b);
 gcry_mpi_t _gcry_mpi_new (unsigned int nbits);
 gcry_mpi_t _gcry_mpi_snew (unsigned int nbits);
 gcry_mpi_t _gcry_mpi_set_opaque_copy (gcry_mpi_t a,
-                                      void *p, unsigned int nbits);
+                                      const void *p, unsigned int nbits);
 void *_gcry_mpi_get_opaque_copy (gcry_mpi_t a, unsigned int *nbits);
 int _gcry_mpi_is_neg (gcry_mpi_t a);
 void _gcry_mpi_neg (gcry_mpi_t w, gcry_mpi_t u);
@@ -171,6 +171,9 @@ byte *_gcry_mpi_get_secure_buffer (gcry_mpi_t a, unsigned int fill_le,
                                    unsigned *r_nbytes, int *sign);
 void  _gcry_mpi_set_buffer ( gcry_mpi_t a, const void *buffer,
                              unsigned int nbytes, int sign );
+gpg_err_code_t _gcry_mpi_to_octet_string (unsigned char **r_frame,
+                                          void *space,
+                                          gcry_mpi_t value, size_t nbytes);
 
 /*-- mpi-add.c --*/
 #define mpi_add_ui(w,u,v) gcry_mpi_add_ui((w),(u),(v))
@@ -334,8 +337,6 @@ int  _gcry_mpi_ec_curve_point (gcry_mpi_point_t point, mpi_ec_t ctx);
 
 gcry_mpi_t _gcry_mpi_ec_ec2os (gcry_mpi_point_t point, mpi_ec_t ectx);
 
-gpg_err_code_t _gcry_mpi_ec_new (gcry_ctx_t *r_ctx,
-                                 gcry_sexp_t keyparam, const char *curvename);
 gcry_mpi_t _gcry_mpi_ec_get_mpi (const char *name, gcry_ctx_t ctx, int copy);
 gcry_mpi_point_t _gcry_mpi_ec_get_point (const char *name,
                                          gcry_ctx_t ctx, int copy);

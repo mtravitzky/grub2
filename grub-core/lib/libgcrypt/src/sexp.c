@@ -54,12 +54,12 @@ struct gcry_sexp
 
 #define TOKEN_SPECIALS  "-./_:*+="
 
-static gcry_error_t
+static gcry_err_code_t
 vsexp_sscan (gcry_sexp_t *retsexp, size_t *erroff,
 	     const char *buffer, size_t length, int argflag,
 	     void **arg_list, va_list arg_ptr);
 
-static gcry_error_t
+static gcry_err_code_t
 sexp_sscan (gcry_sexp_t *retsexp, size_t *erroff,
 	    const char *buffer, size_t length, int argflag,
 	    void **arg_list, ...);
@@ -210,18 +210,18 @@ normalize ( gcry_sexp_t list )
 
    This function returns 0 and and the pointer to the new object in
    RETSEXP or an error code in which case RETSEXP is set to NULL.  */
-gcry_error_t
+gcry_err_code_t
 gcry_sexp_create (gcry_sexp_t *retsexp, void *buffer, size_t length,
                   int autodetect, void (*freefnc)(void*) )
 {
-  gcry_error_t errcode;
+  gcry_err_code_t errcode;
   gcry_sexp_t se;
 
   if (!retsexp)
-    return gcry_error (GPG_ERR_INV_ARG);
+    return GPG_ERR_INV_ARG;
   *retsexp = NULL;
   if (autodetect < 0 || autodetect > 1 || !buffer)
-    return gcry_error (GPG_ERR_INV_ARG);
+    return GPG_ERR_INV_ARG;
 
   if (!length && !autodetect)
     { /* What a brave caller to assume that there is really a canonical
@@ -249,11 +249,11 @@ gcry_sexp_create (gcry_sexp_t *retsexp, void *buffer, size_t length,
          GCRYSEXP object and use the BUFFER directly.  */
       freefnc (buffer);
     }
-  return gcry_error (GPG_ERR_NO_ERROR);
+  return 0;
 }
 
 /* Same as gcry_sexp_create but don't transfer ownership */
-gcry_error_t
+gcry_err_code_t
 gcry_sexp_new (gcry_sexp_t *retsexp, const void *buffer, size_t length,
                int autodetect)
 {
@@ -1047,7 +1047,7 @@ unquote_string (const char *string, size_t length, unsigned char *buf)
  * common operation gcry_sexp_cdr_mpi() will always return a secure MPI
  * regardless whether it is needed or not.
  */
-static gcry_error_t
+static gpg_err_code_t
 vsexp_sscan (gcry_sexp_t *retsexp, size_t *erroff,
 	     const char *buffer, size_t length, int argflag,
 	     void **arg_list, va_list arg_ptr)
@@ -1643,18 +1643,18 @@ vsexp_sscan (gcry_sexp_t *retsexp, size_t *erroff,
   else
     *retsexp = normalize (c.sexp);
 
-  return gcry_error (err);
+  return err;
 #undef MAKE_SPACE
 #undef STORE_LEN
 }
 
 
-static gcry_error_t
+static gpg_err_code_t
 sexp_sscan (gcry_sexp_t *retsexp, size_t *erroff,
 	    const char *buffer, size_t length, int argflag,
 	    void **arg_list, ...)
 {
-  gcry_error_t rc;
+  gcry_err_code_t rc;
   va_list arg_ptr;
 
   va_start (arg_ptr, arg_list);
@@ -1666,10 +1666,10 @@ sexp_sscan (gcry_sexp_t *retsexp, size_t *erroff,
 }
 
 
-gcry_error_t
+gpg_err_code_t
 gcry_sexp_build (gcry_sexp_t *retsexp, size_t *erroff, const char *format, ...)
 {
-  gcry_error_t rc;
+  gcry_err_code_t rc;
   va_list arg_ptr;
 
   va_start (arg_ptr, format);
@@ -1681,7 +1681,7 @@ gcry_sexp_build (gcry_sexp_t *retsexp, size_t *erroff, const char *format, ...)
 }
 
 
-gcry_error_t
+gcry_err_code_t
 _gcry_sexp_vbuild (gcry_sexp_t *retsexp, size_t *erroff,
                    const char *format, va_list arg_ptr)
 {
@@ -1692,7 +1692,7 @@ _gcry_sexp_vbuild (gcry_sexp_t *retsexp, size_t *erroff,
 
 /* Like gcry_sexp_build, but uses an array instead of variable
    function arguments.  */
-gcry_error_t
+gcry_err_code_t
 gcry_sexp_build_array (gcry_sexp_t *retsexp, size_t *erroff,
 		       const char *format, void **arg_list)
 {
@@ -1700,7 +1700,7 @@ gcry_sexp_build_array (gcry_sexp_t *retsexp, size_t *erroff,
 }
 
 
-gcry_error_t
+gcry_err_code_t
 gcry_sexp_sscan (gcry_sexp_t *retsexp, size_t *erroff,
 		 const char *buffer, size_t length)
 {
@@ -1721,6 +1721,12 @@ suitable_encoding (const unsigned char *buffer, size_t length)
 
   if (!length)
     return 1;
+
+  if (*buffer & 0x80)
+    return 0; /* If the MSB is set we assume that buffer represents a
+                 negative number.  */
+  if (!*buffer)
+    return 0; /* Starting with a zero is pretty much a binary string.  */
 
   for (s=buffer; length; s++, length--)
     {
@@ -1983,13 +1989,13 @@ gcry_sexp_sprint (const gcry_sexp_t list, int mode,
    NULL.  */
 size_t
 gcry_sexp_canon_len (const unsigned char *buffer, size_t length,
-                     size_t *erroff, gcry_error_t *errcode)
+                     size_t *erroff, gcry_err_code_t *errcode)
 {
   const unsigned char *p;
   const unsigned char *disphint = NULL;
   unsigned int datalen = 0;
   size_t dummy_erroff;
-  gcry_error_t dummy_errcode;
+  gcry_err_code_t dummy_errcode;
   size_t count = 0;
   int level = 0;
 
@@ -1998,13 +2004,13 @@ gcry_sexp_canon_len (const unsigned char *buffer, size_t length,
   if (!errcode)
     errcode = &dummy_errcode;
 
-  *errcode = gcry_error (GPG_ERR_NO_ERROR);
+  *errcode = GPG_ERR_NO_ERROR;
   *erroff = 0;
   if (!buffer)
     return 0;
   if (*buffer != '(')
     {
-      *errcode = gcry_error (GPG_ERR_SEXP_NOT_CANONICAL);
+      *errcode = GPG_ERR_SEXP_NOT_CANONICAL;
       return 0;
     }
 
@@ -2013,7 +2019,7 @@ gcry_sexp_canon_len (const unsigned char *buffer, size_t length,
       if (length && count >= length)
         {
           *erroff = count;
-          *errcode = gcry_error (GPG_ERR_SEXP_STRING_TOO_LONG);
+          *errcode = GPG_ERR_SEXP_STRING_TOO_LONG;
           return 0;
         }
 
@@ -2024,7 +2030,7 @@ gcry_sexp_canon_len (const unsigned char *buffer, size_t length,
               if (length && (count+datalen) >= length)
                 {
                   *erroff = count;
-                  *errcode = gcry_error (GPG_ERR_SEXP_STRING_TOO_LONG);
+                  *errcode = GPG_ERR_SEXP_STRING_TOO_LONG;
                   return 0;
                 }
               count += datalen;
@@ -2036,7 +2042,7 @@ gcry_sexp_canon_len (const unsigned char *buffer, size_t length,
           else
             {
               *erroff = count;
-              *errcode = gcry_error (GPG_ERR_SEXP_INV_LEN_SPEC);
+              *errcode = GPG_ERR_SEXP_INV_LEN_SPEC;
               return 0;
 	    }
 	}
@@ -2045,7 +2051,7 @@ gcry_sexp_canon_len (const unsigned char *buffer, size_t length,
           if (disphint)
             {
               *erroff = count;
-              *errcode = gcry_error (GPG_ERR_SEXP_UNMATCHED_DH);
+              *errcode = GPG_ERR_SEXP_UNMATCHED_DH;
               return 0;
 	    }
           level++;
@@ -2055,13 +2061,13 @@ gcry_sexp_canon_len (const unsigned char *buffer, size_t length,
           if (!level)
             {
               *erroff = count;
-              *errcode = gcry_error (GPG_ERR_SEXP_UNMATCHED_PAREN);
+              *errcode = GPG_ERR_SEXP_UNMATCHED_PAREN;
               return 0;
 	    }
           if (disphint)
             {
               *erroff = count;
-              *errcode = gcry_error (GPG_ERR_SEXP_UNMATCHED_DH);
+              *errcode = GPG_ERR_SEXP_UNMATCHED_DH;
               return 0;
 	    }
           if (!--level)
@@ -2072,7 +2078,7 @@ gcry_sexp_canon_len (const unsigned char *buffer, size_t length,
           if (disphint)
             {
               *erroff = count;
-              *errcode = gcry_error (GPG_ERR_SEXP_NESTED_DH);
+              *errcode = GPG_ERR_SEXP_NESTED_DH;
               return 0;
             }
           disphint = p;
@@ -2082,7 +2088,7 @@ gcry_sexp_canon_len (const unsigned char *buffer, size_t length,
           if ( !disphint )
             {
               *erroff = count;
-              *errcode = gcry_error (GPG_ERR_SEXP_UNMATCHED_DH);
+              *errcode = GPG_ERR_SEXP_UNMATCHED_DH;
               return 0;
 	    }
           disphint = NULL;
@@ -2092,7 +2098,7 @@ gcry_sexp_canon_len (const unsigned char *buffer, size_t length,
           if (*p == '0')
             {
               *erroff = count;
-              *errcode = gcry_error (GPG_ERR_SEXP_ZERO_PREFIX);
+              *errcode = GPG_ERR_SEXP_ZERO_PREFIX;
               return 0;
 	    }
           datalen = atoi_1 (p);
@@ -2100,13 +2106,13 @@ gcry_sexp_canon_len (const unsigned char *buffer, size_t length,
       else if (*p == '&' || *p == '\\')
         {
           *erroff = count;
-          *errcode = gcry_error (GPG_ERR_SEXP_UNEXPECTED_PUNC);
+          *errcode = GPG_ERR_SEXP_UNEXPECTED_PUNC;
           return 0;
 	}
       else
         {
           *erroff = count;
-          *errcode = gcry_error (GPG_ERR_SEXP_BAD_CHARACTER);
+          *errcode = GPG_ERR_SEXP_BAD_CHARACTER;
           return 0;
 	}
     }

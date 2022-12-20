@@ -50,6 +50,7 @@
 #include <string.h>
 #include "g10lib.h"
 #include "bithelp.h"
+#include "bufhelp.h"
 #include "cipher.h"
 #include "hash-common.h"
 
@@ -63,22 +64,28 @@
 # endif
 #endif
 
-
 typedef struct
 {
   u64 h0, h1, h2, h3, h4, h5, h6, h7;
-  u64 nblocks;
-  byte buf[128];
-  int count;
+} SHA512_STATE;
+
+typedef struct
+{
+  gcry_md_block_ctx_t bctx;
+  SHA512_STATE state;
 #ifdef USE_ARM_NEON_ASM
   int use_neon;
 #endif
 } SHA512_CONTEXT;
 
+static unsigned int
+transform (void *context, const unsigned char *data);
+
 static void
 sha512_init (void *context)
 {
-  SHA512_CONTEXT *hd = context;
+  SHA512_CONTEXT *ctx = context;
+  SHA512_STATE *hd = &ctx->state;
 
   hd->h0 = U64_C(0x6a09e667f3bcc908);
   hd->h1 = U64_C(0xbb67ae8584caa73b);
@@ -89,17 +96,21 @@ sha512_init (void *context)
   hd->h6 = U64_C(0x1f83d9abfb41bd6b);
   hd->h7 = U64_C(0x5be0cd19137e2179);
 
-  hd->nblocks = 0;
-  hd->count = 0;
+  ctx->bctx.nblocks = 0;
+  ctx->bctx.count = 0;
+  ctx->bctx.blocksize = 128;
+  ctx->bctx.bwrite = transform;
+
 #ifdef USE_ARM_NEON_ASM
-  hd->use_neon = (_gcry_get_hw_features () & HWF_ARM_NEON) != 0;
+  ctx->use_neon = (_gcry_get_hw_features () & HWF_ARM_NEON) != 0;
 #endif
 }
 
 static void
 sha384_init (void *context)
 {
-  SHA512_CONTEXT *hd = context;
+  SHA512_CONTEXT *ctx = context;
+  SHA512_STATE *hd = &ctx->state;
 
   hd->h0 = U64_C(0xcbbb9d5dc1059ed8);
   hd->h1 = U64_C(0x629a292a367cd507);
@@ -110,10 +121,13 @@ sha384_init (void *context)
   hd->h6 = U64_C(0xdb0c2e0d64f98fa7);
   hd->h7 = U64_C(0x47b5481dbefa4fa4);
 
-  hd->nblocks = 0;
-  hd->count = 0;
+  ctx->bctx.nblocks = 0;
+  ctx->bctx.count = 0;
+  ctx->bctx.blocksize = 128;
+  ctx->bctx.bwrite = transform;
+
 #ifdef USE_ARM_NEON_ASM
-  hd->use_neon = (_gcry_get_hw_features () & HWF_ARM_NEON) != 0;
+  ctx->use_neon = (_gcry_get_hw_features () & HWF_ARM_NEON) != 0;
 #endif
 }
 
@@ -195,8 +209,8 @@ static const u64 k[] =
 /****************
  * Transform the message W which consists of 16 64-bit-words
  */
-static void
-__transform (SHA512_CONTEXT *hd, const unsigned char *data)
+static unsigned int
+__transform (SHA512_STATE *hd, const unsigned char *data)
 {
   u64 a, b, c, d, e, f, g, h;
   u64 w[16];
@@ -212,26 +226,8 @@ __transform (SHA512_CONTEXT *hd, const unsigned char *data)
   g = hd->h6;
   h = hd->h7;
 
-#ifdef WORDS_BIGENDIAN
-  memcpy (w, data, 128);
-#else
-  {
-    int i;
-    byte *p2;
-
-    for (i = 0, p2 = (byte *) w; i < 16; i++, p2 += 8)
-      {
-	p2[7] = *data++;
-	p2[6] = *data++;
-	p2[5] = *data++;
-	p2[4] = *data++;
-	p2[3] = *data++;
-	p2[2] = *data++;
-	p2[1] = *data++;
-	p2[0] = *data++;
-      }
-  }
-#endif
+  for ( t = 0; t < 16; t++ )
+    w[t] = buf_get_be64(data + t * 8);
 
 #define S0(x) (ROTR((x),1) ^ ROTR((x),8) ^ ((x)>>7))
 #define S1(x) (ROTR((x),19) ^ ROTR((x),61) ^ ((x)>>6))
@@ -473,75 +469,36 @@ __transform (SHA512_CONTEXT *hd, const unsigned char *data)
   hd->h5 += f;
   hd->h6 += g;
   hd->h7 += h;
+
+  return /* burn_stack */ (8 + 16) * sizeof(u64) + sizeof(u32) +
+                          3 * sizeof(void*);
 }
 
 
 #ifdef USE_ARM_NEON_ASM
-void _gcry_sha512_transform_armv7_neon (SHA512_CONTEXT *hd,
+void _gcry_sha512_transform_armv7_neon (SHA512_STATE *hd,
 					const unsigned char *data,
 					const u64 k[]);
 #endif
 
 
 static unsigned int
-transform (SHA512_CONTEXT *hd, const unsigned char *data)
+transform (void *context, const unsigned char *data)
 {
+  SHA512_CONTEXT *ctx = context;
+
 #ifdef USE_ARM_NEON_ASM
   if (hd->use_neon)
     {
-      _gcry_sha512_transform_armv7_neon(hd, data, k);
+      _gcry_sha512_transform_armv7_neon(&ctx->state, data, k);
 
-      /* return stack burn depth */
-      return (sizeof(void *) * 3);
+      /* _gcry_sha512_transform_armv7_neon does not store sensitive data
+       * to stack.  */
+      return /* no burn_stack */ 0;
     }
 #endif
 
-  __transform (hd, data);
-
-  /* return stack burn depth */
-  return 256;
-}
-
-
-/* Update the message digest with the contents
- * of INBUF with length INLEN.
- */
-static void
-sha512_write (void *context, const void *inbuf_arg, size_t inlen)
-{
-  const unsigned char *inbuf = inbuf_arg;
-  SHA512_CONTEXT *hd = context;
-  unsigned int stack_burn_depth = 0;
-
-  if (hd->count == 128)
-    {				/* flush the buffer */
-      stack_burn_depth = transform (hd, hd->buf);
-      _gcry_burn_stack (stack_burn_depth);
-      hd->count = 0;
-      hd->nblocks++;
-    }
-  if (!inbuf)
-    return;
-  if (hd->count)
-    {
-      for (; inlen && hd->count < 128; inlen--)
-	hd->buf[hd->count++] = *inbuf++;
-      sha512_write (context, NULL, 0);
-      if (!inlen)
-	return;
-    }
-
-  while (inlen >= 128)
-    {
-      stack_burn_depth = transform (hd, inbuf);
-      hd->count = 0;
-      hd->nblocks++;
-      inlen -= 128;
-      inbuf += 128;
-    }
-  _gcry_burn_stack (stack_burn_depth);
-  for (; inlen && hd->count < 128; inlen--)
-    hd->buf[hd->count++] = *inbuf++;
+  return __transform (&ctx->state, data) + 3 * sizeof(void*);
 }
 
 
@@ -561,15 +518,15 @@ sha512_final (void *context)
   u64 t, msb, lsb;
   byte *p;
 
-  sha512_write (context, NULL, 0); /* flush */ ;
+  _gcry_md_block_write (context, NULL, 0); /* flush */ ;
 
-  t = hd->nblocks;
+  t = hd->bctx.nblocks;
   /* multiply by 128 to make a byte count */
   lsb = t << 7;
   msb = t >> 57;
   /* add the count */
   t = lsb;
-  if ((lsb += hd->count) < t)
+  if ((lsb += hd->bctx.count) < t)
     msb++;
   /* multiply by 8 to make a bit count */
   t = lsb;
@@ -577,50 +534,28 @@ sha512_final (void *context)
   msb <<= 3;
   msb |= t >> 61;
 
-  if (hd->count < 112)
+  if (hd->bctx.count < 112)
     {				/* enough room */
-      hd->buf[hd->count++] = 0x80;	/* pad */
-      while (hd->count < 112)
-	hd->buf[hd->count++] = 0;	/* pad */
+      hd->bctx.buf[hd->bctx.count++] = 0x80;	/* pad */
+      while (hd->bctx.count < 112)
+        hd->bctx.buf[hd->bctx.count++] = 0;	/* pad */
     }
   else
     {				/* need one extra block */
-      hd->buf[hd->count++] = 0x80;	/* pad character */
-      while (hd->count < 128)
-	hd->buf[hd->count++] = 0;
-      sha512_write (context, NULL, 0); /* flush */ ;
-      memset (hd->buf, 0, 112);	/* fill next block with zeroes */
+      hd->bctx.buf[hd->bctx.count++] = 0x80;	/* pad character */
+      while (hd->bctx.count < 128)
+        hd->bctx.buf[hd->bctx.count++] = 0;
+      _gcry_md_block_write (context, NULL, 0); /* flush */ ;
+      memset (hd->bctx.buf, 0, 112);	/* fill next block with zeroes */
     }
   /* append the 128 bit count */
-  hd->buf[112] = msb >> 56;
-  hd->buf[113] = msb >> 48;
-  hd->buf[114] = msb >> 40;
-  hd->buf[115] = msb >> 32;
-  hd->buf[116] = msb >> 24;
-  hd->buf[117] = msb >> 16;
-  hd->buf[118] = msb >> 8;
-  hd->buf[119] = msb;
-
-  hd->buf[120] = lsb >> 56;
-  hd->buf[121] = lsb >> 48;
-  hd->buf[122] = lsb >> 40;
-  hd->buf[123] = lsb >> 32;
-  hd->buf[124] = lsb >> 24;
-  hd->buf[125] = lsb >> 16;
-  hd->buf[126] = lsb >> 8;
-  hd->buf[127] = lsb;
-  stack_burn_depth = transform (hd, hd->buf);
+  buf_put_be64(hd->bctx.buf + 112, msb);
+  buf_put_be64(hd->bctx.buf + 120, lsb);
+  stack_burn_depth = transform (hd, hd->bctx.buf);
   _gcry_burn_stack (stack_burn_depth);
 
-  p = hd->buf;
-#ifdef WORDS_BIGENDIAN
-#define X(a) do { *(u64*)p = hd->h##a ; p += 8; } while (0)
-#else /* little endian */
-#define X(a) do { *p++ = hd->h##a >> 56; *p++ = hd->h##a >> 48;	      \
-                  *p++ = hd->h##a >> 40; *p++ = hd->h##a >> 32;	      \
-                  *p++ = hd->h##a >> 24; *p++ = hd->h##a >> 16;	      \
-                  *p++ = hd->h##a >> 8;  *p++ = hd->h##a; } while (0)
-#endif
+  p = hd->bctx.buf;
+#define X(a) do { *(u64*)p = be_bswap64(hd->state.h##a) ; p += 8; } while (0)
   X (0);
   X (1);
   X (2);
@@ -638,7 +573,7 @@ static byte *
 sha512_read (void *context)
 {
   SHA512_CONTEXT *hd = (SHA512_CONTEXT *) context;
-  return hd->buf;
+  return hd->bctx.buf;
 }
 
 
@@ -797,7 +732,7 @@ static gcry_md_oid_spec_t oid_spec_sha512[] =
 gcry_md_spec_t _gcry_digest_spec_sha512 =
   {
     "SHA512", sha512_asn, DIM (sha512_asn), oid_spec_sha512, 64,
-    sha512_init, sha512_write, sha512_final, sha512_read,
+    sha512_init, _gcry_md_block_write, sha512_final, sha512_read,
     sizeof (SHA512_CONTEXT),
   };
 md_extra_spec_t _gcry_digest_extraspec_sha512 =
@@ -825,7 +760,7 @@ static gcry_md_oid_spec_t oid_spec_sha384[] =
 gcry_md_spec_t _gcry_digest_spec_sha384 =
   {
     "SHA384", sha384_asn, DIM (sha384_asn), oid_spec_sha384, 48,
-    sha384_init, sha512_write, sha512_final, sha512_read,
+    sha384_init, _gcry_md_block_write, sha512_final, sha512_read,
     sizeof (SHA512_CONTEXT),
   };
 md_extra_spec_t _gcry_digest_extraspec_sha384 =

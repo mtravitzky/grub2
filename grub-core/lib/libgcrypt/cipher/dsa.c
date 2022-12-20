@@ -271,7 +271,7 @@ generate (DSA_secret_key *sk, unsigned int nbits, unsigned int qbits,
    * part.  The random quality depends on the transient_key flag.  */
   random_level = transient_key ? GCRY_STRONG_RANDOM : GCRY_VERY_STRONG_RANDOM;
   if (DBG_CIPHER)
-    log_debug("choosing a random x%s", transient_key? " (transient-key)":"");
+    log_debug("choosing a random x%s\n", transient_key? " (transient-key)":"");
   gcry_assert( qbits >= 160 );
   x = mpi_alloc_secure( mpi_get_nlimbs(q) );
   mpi_sub_ui( h, q, 1 );  /* put q-1 into h */
@@ -689,25 +689,26 @@ verify (gcry_mpi_t r, gcry_mpi_t s, gcry_mpi_t hash, DSA_public_key *pkey )
  *********************************************/
 
 static gcry_err_code_t
-dsa_generate_ext (int algo, unsigned int nbits, unsigned long evalue,
-                  const gcry_sexp_t genparms,
-                  gcry_mpi_t *skey, gcry_mpi_t **retfactors,
-                  gcry_sexp_t *r_extrainfo)
+dsa_generate (int algo, unsigned int nbits, unsigned long evalue,
+              const gcry_sexp_t genparms, gcry_sexp_t *r_skey)
 {
-  gpg_err_code_t ec;
+  gpg_err_code_t rc;
   DSA_secret_key sk;
   gcry_sexp_t l1;
   unsigned int qbits = 0;
   gcry_sexp_t deriveparms = NULL;
   gcry_sexp_t seedinfo = NULL;
+  gcry_sexp_t misc_info = NULL;
   int transient_key = 0;
   int use_fips186_2 = 0;
   int use_fips186 = 0;
   dsa_domain_t domain;
+  gcry_mpi_t *factors = NULL;
 
   (void)algo;    /* No need to check it.  */
   (void)evalue;  /* Not required for DSA. */
 
+  memset (&sk, 0, sizeof sk);
   memset (&domain, 0, sizeof domain);
 
   if (genparms)
@@ -809,141 +810,113 @@ dsa_generate_ext (int algo, unsigned int nbits, unsigned long evalue,
       size_t seedlen;
       gcry_mpi_t h_value;
 
-      ec = generate_fips186 (&sk, nbits, qbits, deriveparms, use_fips186_2,
+      rc = generate_fips186 (&sk, nbits, qbits, deriveparms, use_fips186_2,
                              &domain,
                              &counter, &seed, &seedlen, &h_value);
-      gcry_sexp_release (deriveparms);
-      if (!ec && h_value)
+      if (!rc && h_value)
         {
           /* Format the seed-values unless domain parameters are used
              for which a H_VALUE of NULL is an indication.  */
-          ec = gpg_err_code (gcry_sexp_build
-                             (&seedinfo, NULL,
-                              "(seed-values(counter %d)(seed %b)(h %m))",
-                              counter, (int)seedlen, seed, h_value));
-          if (ec)
-            {
-              gcry_mpi_release (sk.p); sk.p = NULL;
-              gcry_mpi_release (sk.q); sk.q = NULL;
-              gcry_mpi_release (sk.g); sk.g = NULL;
-              gcry_mpi_release (sk.y); sk.y = NULL;
-              gcry_mpi_release (sk.x); sk.x = NULL;
-            }
+          rc = gcry_sexp_build (&seedinfo, NULL,
+                                "(seed-values(counter %d)(seed %b)(h %m))",
+                                counter, (int)seedlen, seed, h_value);
           gcry_free (seed);
           gcry_mpi_release (h_value);
         }
     }
   else
     {
-      ec = generate (&sk, nbits, qbits, transient_key, &domain, retfactors);
+      rc = generate (&sk, nbits, qbits, transient_key, &domain, &factors);
     }
+
+  if (!rc)
+    {
+      /* Put the factors into MISC_INFO.  Note that the factors are
+         not confidential thus we can store them in standard memory.  */
+      int nfactors, i, j;
+      char *p;
+      char *format = NULL;
+      void **arg_list = NULL;
+
+      for (nfactors=0; factors && factors[nfactors]; nfactors++)
+        ;
+      /* Allocate space for the format string:
+         "(misc-key-info%S(pm1-factors%m))"
+         with one "%m" for each factor and construct it.  */
+      format = gcry_malloc (50 + 2*nfactors);
+      if (!format)
+        rc = gpg_err_code_from_syserror ();
+      else
+        {
+          p = stpcpy (format, "(misc-key-info");
+          if (seedinfo)
+            p = stpcpy (p, "%S");
+          if (nfactors)
+            {
+              p = stpcpy (p, "(pm1-factors");
+              for (i=0; i < nfactors; i++)
+                p = stpcpy (p, "%m");
+              p = stpcpy (p, ")");
+            }
+          p = stpcpy (p, ")");
+
+          /* Allocate space for the list of factors plus one for the
+             seedinfo s-exp plus an extra NULL entry for safety and
+             fill it with the factors.  */
+          arg_list = gcry_calloc (nfactors+1+1, sizeof *arg_list);
+          if (!arg_list)
+            rc = gpg_err_code_from_syserror ();
+          else
+            {
+              i = 0;
+              if (seedinfo)
+                arg_list[i++] = &seedinfo;
+              for (j=0; j < nfactors; j++)
+                arg_list[i++] = factors + j;
+              arg_list[i] = NULL;
+
+              rc = gcry_sexp_build_array (&misc_info, NULL, format, arg_list);
+            }
+        }
+
+      gcry_free (arg_list);
+      gcry_free (format);
+    }
+
+  if (!rc)
+    rc = gcry_sexp_build (r_skey, NULL,
+                          "(key-data"
+                          " (public-key"
+                          "  (dsa(p%m)(q%m)(g%m)(y%m)))"
+                          " (private-key"
+                          "  (dsa(p%m)(q%m)(g%m)(y%m)(x%m)))"
+                          " %S)",
+                          sk.p, sk.q, sk.g, sk.y,
+                          sk.p, sk.q, sk.g, sk.y, sk.x,
+                          misc_info);
+
+
+  gcry_mpi_release (sk.p);
+  gcry_mpi_release (sk.q);
+  gcry_mpi_release (sk.g);
+  gcry_mpi_release (sk.y);
+  gcry_mpi_release (sk.x);
 
   gcry_mpi_release (domain.p);
   gcry_mpi_release (domain.q);
   gcry_mpi_release (domain.g);
 
-  if (!ec)
-    {
-      skey[0] = sk.p;
-      skey[1] = sk.q;
-      skey[2] = sk.g;
-      skey[3] = sk.y;
-      skey[4] = sk.x;
-
-      if (!r_extrainfo)
-        {
-          /* Old style interface - return the factors - if any - at
-             retfactors.  */
-        }
-      else if (!*retfactors && !seedinfo)
-        {
-          /* No factors and no seedinfo, thus there is nothing to return.  */
-          *r_extrainfo = NULL;
-        }
-      else
-        {
-          /* Put the factors into extrainfo and set retfactors to NULL
-             to make use of the new interface.  Note that the factors
-             are not confidential thus we can store them in standard
-             memory.  */
-          int nfactors, i, j;
-          char *p;
-          char *format = NULL;
-          void **arg_list = NULL;
-
-          for (nfactors=0; *retfactors && (*retfactors)[nfactors]; nfactors++)
-            ;
-          /* Allocate space for the format string:
-               "(misc-key-info%S(pm1-factors%m))"
-             with one "%m" for each factor and construct it.  */
-          format = gcry_malloc (50 + 2*nfactors);
-          if (!format)
-            ec = gpg_err_code_from_syserror ();
-          else
-            {
-              p = stpcpy (format, "(misc-key-info");
-              if (seedinfo)
-                p = stpcpy (p, "%S");
-              if (nfactors)
-                {
-                  p = stpcpy (p, "(pm1-factors");
-                  for (i=0; i < nfactors; i++)
-                    p = stpcpy (p, "%m");
-                  p = stpcpy (p, ")");
-                }
-              p = stpcpy (p, ")");
-
-              /* Allocate space for the list of factors plus one for
-                 an S-expression plus an extra NULL entry for safety
-                 and fill it with the factors.  */
-              arg_list = gcry_calloc (nfactors+1+1, sizeof *arg_list);
-              if (!arg_list)
-                ec = gpg_err_code_from_syserror ();
-              else
-                {
-                  i = 0;
-                  if (seedinfo)
-                    arg_list[i++] = &seedinfo;
-                  for (j=0; j < nfactors; j++)
-                    arg_list[i++] = (*retfactors) + j;
-                  arg_list[i] = NULL;
-
-                  ec = gpg_err_code (gcry_sexp_build_array
-                                     (r_extrainfo, NULL, format, arg_list));
-                }
-            }
-
-          gcry_free (arg_list);
-          gcry_free (format);
-          for (i=0; i < nfactors; i++)
-            {
-              gcry_mpi_release ((*retfactors)[i]);
-              (*retfactors)[i] = NULL;
-            }
-          gcry_free (*retfactors);
-          *retfactors = NULL;
-          if (ec)
-            {
-              for (i=0; i < 5; i++)
-                {
-                  gcry_mpi_release (skey[i]);
-                  skey[i] = NULL;
-                }
-            }
-        }
-    }
-
   gcry_sexp_release (seedinfo);
-  return ec;
-}
-
-
-static gcry_err_code_t
-dsa_generate (int algo, unsigned int nbits, unsigned long evalue,
-              gcry_mpi_t *skey, gcry_mpi_t **retfactors)
-{
-  (void)evalue;
-  return dsa_generate_ext (algo, nbits, 0, NULL, skey, retfactors, NULL);
+  gcry_sexp_release (misc_info);
+  gcry_sexp_release (deriveparms);
+  if (factors)
+    {
+      gcry_mpi_t *mp;
+      for (mp = factors; *mp; mp++)
+        mpi_free (*mp);
+      gcry_free (factors);
+    }
+  return rc;
 }
 
 
@@ -974,11 +947,12 @@ dsa_check_secret_key (int algo, gcry_mpi_t *skey)
 
 
 static gcry_err_code_t
-dsa_sign (int algo, gcry_mpi_t *resarr, gcry_mpi_t data, gcry_mpi_t *skey,
+dsa_sign (int algo, gcry_sexp_t *r_result, gcry_mpi_t data, gcry_mpi_t *skey,
           int flags, int hashalgo)
 {
   gcry_err_code_t rc;
   DSA_secret_key sk;
+  gcry_mpi_t r, s;
 
   (void)algo;
   (void)flags;
@@ -995,9 +969,13 @@ dsa_sign (int algo, gcry_mpi_t *resarr, gcry_mpi_t data, gcry_mpi_t *skey,
       sk.g = skey[2];
       sk.y = skey[3];
       sk.x = skey[4];
-      resarr[0] = mpi_alloc (mpi_get_nlimbs (sk.p));
-      resarr[1] = mpi_alloc (mpi_get_nlimbs (sk.p));
-      rc = sign (resarr[0], resarr[1], data, &sk, flags, hashalgo);
+      r = mpi_alloc (mpi_get_nlimbs (sk.p));
+      s = mpi_alloc (mpi_get_nlimbs (sk.p));
+      rc = sign (r, s, data, &sk, flags, hashalgo);
+      if (!rc)
+        rc = gcry_sexp_build (r_result, NULL, "(sig-val(dsa(r%M)(s%M)))", r, s);
+      mpi_free (r);
+      mpi_free (s);
     }
   return rc;
 }
@@ -1205,19 +1183,16 @@ static const char *dsa_names[] =
 
 gcry_pk_spec_t _gcry_pubkey_spec_dsa =
   {
+    GCRY_PK_DSA, { 0, 1 },
+    GCRY_PK_USAGE_SIGN,
     "DSA", dsa_names,
     "pqgy", "pqgyx", "", "rs", "pqgy",
-    GCRY_PK_USAGE_SIGN,
     dsa_generate,
     dsa_check_secret_key,
     NULL,
     NULL,
     dsa_sign,
     dsa_verify,
-    dsa_get_nbits
-  };
-pk_extra_spec_t _gcry_pubkey_extraspec_dsa =
-  {
-    run_selftests,
-    dsa_generate_ext
+    dsa_get_nbits,
+    run_selftests
   };
