@@ -180,6 +180,43 @@ typedef struct gcry_md_spec
 struct gcry_mpi;
 typedef struct gcry_mpi *gcry_mpi_t;
 
+/* The object to represent an S-expression as used with the public key
+   functions.  */
+struct gcry_sexp;
+typedef struct gcry_sexp *gcry_sexp_t;
+
+/* (Forward declaration.)  */
+struct gcry_md_context;
+
+/* This object is used to hold a handle to a message digest object.
+   This structure is private - only to be used by the public gcry_md_*
+   macros.  */
+typedef struct gcry_md_handle
+{
+  /* Actual context.  */
+  struct gcry_md_context *ctx;
+
+  /* Buffer management.  */
+  int  bufpos;
+  int  bufsize;
+  unsigned char buf[1];
+} *gcry_md_hd_t;
+
+/* Definition of a function used to report selftest failures.
+   DOMAIN is a string describing the function block:
+          "cipher", "digest", "pubkey or "random",
+   ALGO   is the algorithm under test,
+   WHAT   is a string describing what has been tested,
+   DESC   is a string describing the error. */
+typedef void (*selftest_report_func_t)(const char *domain,
+                                       int algo,
+                                       const char *what,
+                                       const char *errdesc);
+
+/* Definition of the selftest functions.  */
+typedef gpg_err_code_t (*selftest_func_t)
+     (int algo, int extended, selftest_report_func_t report);
+
 /* Type for the pk_generate function.  */
 typedef gcry_err_code_t (*gcry_pk_generate_t) (int algo,
 					       unsigned int nbits,
@@ -222,9 +259,31 @@ typedef gcry_err_code_t (*gcry_pk_verify_t) (int algo,
 /* Type for the pk_get_nbits function.  */
 typedef unsigned (*gcry_pk_get_nbits_t) (int algo, gcry_mpi_t *pkey);
 
+
+/* The type used to compute the keygrip.  */
+typedef gpg_err_code_t (*pk_comp_keygrip_t) (gcry_md_hd_t md,
+                                             gcry_sexp_t keyparm);
+
+/* The type used to query ECC curve parameters.  */
+typedef gcry_err_code_t (*pk_get_param_t) (const char *name,
+                                           gcry_mpi_t *pkey);
+
+/* The type used to query an ECC curve name.  */
+typedef const char *(*pk_get_curve_t)(gcry_mpi_t *pkey, int iterator,
+                                      unsigned int *r_nbits);
+
+/* The type used to query ECC curve parameters by name.  */
+typedef gcry_sexp_t (*pk_get_curve_param_t)(const char *name);
+
 /* Module specification structure for message digests.  */
 typedef struct gcry_pk_spec
 {
+  int algo;
+  struct {
+    unsigned int disabled:1;
+    unsigned int fips:1;
+  } flags;
+  int use;
   const char *name;
   const char **aliases;
   const char *elements_pkey;
@@ -232,7 +291,6 @@ typedef struct gcry_pk_spec
   const char *elements_enc;
   const char *elements_sig;
   const char *elements_grip;
-  int use;
   gcry_pk_generate_t generate;
   gcry_pk_check_secret_key_t check_secret_key;
   gcry_pk_encrypt_t encrypt;
@@ -240,6 +298,11 @@ typedef struct gcry_pk_spec
   gcry_pk_sign_t sign;
   gcry_pk_verify_t verify;
   gcry_pk_get_nbits_t get_nbits;
+  selftest_func_t selftest;
+  pk_comp_keygrip_t comp_keygrip;
+  pk_get_param_t get_param;
+  pk_get_curve_t get_curve;
+  pk_get_curve_param_t get_curve_param;
 #ifdef GRUB_UTIL
   const char *modname;
 #endif

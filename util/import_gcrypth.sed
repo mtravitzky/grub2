@@ -14,5 +14,9 @@
 /^typedef gpg_err_code_t gcry_err_code_t;/ d
 /^typedef struct gcry_mpi \*gcry_mpi_t;/ d
 /^struct gcry_thread_cbs/ d
+/^struct gcry_sexp;/ d
+/^typedef struct gcry_sexp \*gcry_sexp_t;/ d
+/^struct gcry_md_context;/ d
+/^typedef struct gcry_md_handle\s*$/,/^} \*gcry_md_hd_t;/ d
 s,_gcry_mpi_invm,gcry_mpi_invm,g
 p
