@@ -88,6 +88,12 @@ void _gcry_log_error (const char *fmt, ...)
     }
 }
 
+void
+_gcry_bug(const char *file, int line, const char *func)
+{
+  grub_fatal ("... this is a bug (%s:%d:%s)\n", file, line, func);
+}
+
 void 
 grub_cipher_register (gcry_cipher_spec_t *cipher)
 {
