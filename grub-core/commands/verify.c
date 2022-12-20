@@ -596,7 +596,8 @@ grub_verify_signature_real (char *buf, grub_size_t size,
       return grub_error (GRUB_ERR_BAD_SIGNATURE, N_("bad signature"));
     if (!*pkalgos[pk].algo)
       return grub_error (GRUB_ERR_BAD_SIGNATURE, N_("module `%s' isn't loaded"), pkalgos[pk].module);
-    if ((*pkalgos[pk].algo)->verify (0, hmpi, mpis, sk->mpis, 0, 0))
+    /* TODO: check last two arguments in new api are necessary */
+    if ((*pkalgos[pk].algo)->verify (0, hmpi, mpis, sk->mpis, 0, 0, 0, 0))
       return grub_error (GRUB_ERR_BAD_SIGNATURE, N_("bad signature"));
   }
 
