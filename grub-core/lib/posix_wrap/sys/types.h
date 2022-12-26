@@ -55,6 +55,7 @@ typedef grub_addr_t uintptr_t;
 #define SIZEOF_UNSIGNED_LONG_LONG 8
 #define SIZEOF_UNSIGNED_SHORT 2
 #define SIZEOF_UINT64_T 8
+#define U64_C(c) (c ## ULL)
 
 #ifdef GRUB_CPU_WORDS_BIGENDIAN
 #define WORDS_BIGENDIAN 1
