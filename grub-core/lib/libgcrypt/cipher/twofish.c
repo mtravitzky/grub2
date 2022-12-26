@@ -57,6 +57,14 @@
 # define USE_AMD64_ASM 1
 #endif
 
+/* USE_ARM_ASM indicates whether to use ARM assembly code. */
+#undef USE_ARM_ASM
+#if defined(__ARMEL__)
+# if defined(HAVE_COMPATIBLE_GCC_ARM_PLATFORM_AS)
+#  define USE_ARM_ASM 1
+# endif
+#endif
+
 
 /* Prototype for the self-test function. */
 static const char *selftest(void);
@@ -746,7 +754,16 @@ extern void _gcry_twofish_amd64_cbc_dec(const TWOFISH_context *c, byte *out,
 extern void _gcry_twofish_amd64_cfb_dec(const TWOFISH_context *c, byte *out,
 					const byte *in, byte *iv);
 
-#else /*!USE_AMD64_ASM*/
+#elif defined(USE_ARM_ASM)
+
+/* Assembly implementations of Twofish. */
+extern void _gcry_twofish_arm_encrypt_block(const TWOFISH_context *c,
+					      byte *out, const byte *in);
+
+extern void _gcry_twofish_arm_decrypt_block(const TWOFISH_context *c,
+					      byte *out, const byte *in);
+
+#else /*!USE_AMD64_ASM && !USE_ARM_ASM*/
 
 /* Macros to compute the g() function in the encryption and decryption
  * rounds.  G1 is the straight g() function; G2 includes the 8-bit
@@ -812,12 +829,6 @@ extern void _gcry_twofish_amd64_cfb_dec(const TWOFISH_context *c, byte *out,
 
 #ifdef USE_AMD64_ASM
 
-static void
-do_twofish_encrypt (const TWOFISH_context *ctx, byte *out, const byte *in)
-{
-  _gcry_twofish_amd64_encrypt_block(ctx, out, in);
-}
-
 static unsigned int
 twofish_encrypt (void *context, byte *out, const byte *in)
 {
@@ -826,7 +837,17 @@ twofish_encrypt (void *context, byte *out, const byte *in)
   return /*burn_stack*/ (4*sizeof (void*));
 }
 
-#else /*!USE_AMD64_ASM*/
+#elif defined(USE_ARM_ASM)
+
+static unsigned int
+twofish_encrypt (void *context, byte *out, const byte *in)
+{
+  TWOFISH_context *ctx = context;
+  _gcry_twofish_arm_encrypt_block(ctx, out, in);
+  return /*burn_stack*/ (4*sizeof (void*));
+}
+
+#else /*!USE_AMD64_ASM && !USE_ARM_ASM*/
 
 static void
 do_twofish_encrypt (const TWOFISH_context *ctx, byte *out, const byte *in)
@@ -868,18 +889,12 @@ twofish_encrypt (void *context, byte *out, const byte *in)
   return /*burn_stack*/ (24+3*sizeof (void*));
 }
 
-#endif /*!USE_AMD64_ASM*/
+#endif /*!USE_AMD64_ASM && !USE_ARM_ASM*/
 
 
 /* Decrypt one block.  in and out may be the same. */
 
 #ifdef USE_AMD64_ASM
-
-static void
-do_twofish_decrypt (const TWOFISH_context *ctx, byte *out, const byte *in)
-{
-  _gcry_twofish_amd64_decrypt_block(ctx, out, in);
-}
 
 static unsigned int
 twofish_decrypt (void *context, byte *out, const byte *in)
@@ -889,7 +904,17 @@ twofish_decrypt (void *context, byte *out, const byte *in)
   return /*burn_stack*/ (4*sizeof (void*));
 }
 
-#else /*!USE_AMD64_ASM*/
+#elif defined(USE_ARM_ASM)
+
+static unsigned int
+twofish_decrypt (void *context, byte *out, const byte *in)
+{
+  TWOFISH_context *ctx = context;
+  _gcry_twofish_arm_decrypt_block(ctx, out, in);
+  return /*burn_stack*/ (4*sizeof (void*));
+}
+
+#else /*!USE_AMD64_ASM && !USE_ARM_ASM*/
 
 static void
 do_twofish_decrypt (const TWOFISH_context *ctx, byte *out, const byte *in)
@@ -932,7 +957,7 @@ twofish_decrypt (void *context, byte *out, const byte *in)
   return /*burn_stack*/ (24+3*sizeof (void*));
 }
 
-#endif /*!USE_AMD64_ASM*/
+#endif /*!USE_AMD64_ASM && !USE_ARM_ASM*/
 
 
 
@@ -947,14 +972,11 @@ _gcry_twofish_ctr_enc(void *context, unsigned char *ctr, void *outbuf_arg,
   unsigned char *outbuf = outbuf_arg;
   const unsigned char *inbuf = inbuf_arg;
   unsigned char tmpbuf[TWOFISH_BLOCKSIZE];
-  int burn_stack_depth = 24 + 3 * sizeof (void*);
+  unsigned int burn, burn_stack_depth = 0;
   int i;
 
 #ifdef USE_AMD64_ASM
   {
-    if (nblocks >= 3 && burn_stack_depth < 8 * sizeof(void*))
-      burn_stack_depth = 8 * sizeof(void*);
-
     /* Process data in 3 block chunks. */
     while (nblocks >= 3)
       {
@@ -963,6 +985,10 @@ _gcry_twofish_ctr_enc(void *context, unsigned char *ctr, void *outbuf_arg,
         nblocks -= 3;
         outbuf += 3 * TWOFISH_BLOCKSIZE;
         inbuf += 3 * TWOFISH_BLOCKSIZE;
+
+        burn = 8 * sizeof(void*);
+        if (burn > burn_stack_depth)
+          burn_stack_depth = burn;
       }
 
     /* Use generic code to handle smaller chunks... */
@@ -973,7 +999,10 @@ _gcry_twofish_ctr_enc(void *context, unsigned char *ctr, void *outbuf_arg,
   for ( ;nblocks; nblocks-- )
     {
       /* Encrypt the counter. */
-      do_twofish_encrypt(ctx, tmpbuf, ctr);
+      burn = twofish_encrypt(ctx, tmpbuf, ctr);
+      if (burn > burn_stack_depth)
+        burn_stack_depth = burn;
+
       /* XOR the input with the encrypted counter and store in output.  */
       buf_xor(outbuf, tmpbuf, inbuf, TWOFISH_BLOCKSIZE);
       outbuf += TWOFISH_BLOCKSIZE;
@@ -1002,13 +1031,10 @@ _gcry_twofish_cbc_dec(void *context, unsigned char *iv, void *outbuf_arg,
   unsigned char *outbuf = outbuf_arg;
   const unsigned char *inbuf = inbuf_arg;
   unsigned char savebuf[TWOFISH_BLOCKSIZE];
-  int burn_stack_depth = 24 + 3 * sizeof (void*);
+  unsigned int burn, burn_stack_depth = 0;
 
 #ifdef USE_AMD64_ASM
   {
-    if (nblocks >= 3 && burn_stack_depth < 9 * sizeof(void*))
-      burn_stack_depth = 9 * sizeof(void*);
-
     /* Process data in 3 block chunks. */
     while (nblocks >= 3)
       {
@@ -1017,6 +1043,10 @@ _gcry_twofish_cbc_dec(void *context, unsigned char *iv, void *outbuf_arg,
         nblocks -= 3;
         outbuf += 3 * TWOFISH_BLOCKSIZE;
         inbuf += 3 * TWOFISH_BLOCKSIZE;
+
+        burn = 9 * sizeof(void*);
+        if (burn > burn_stack_depth)
+          burn_stack_depth = burn;
       }
 
     /* Use generic code to handle smaller chunks... */
@@ -1025,14 +1055,13 @@ _gcry_twofish_cbc_dec(void *context, unsigned char *iv, void *outbuf_arg,
 
   for ( ;nblocks; nblocks-- )
     {
-      /* We need to save INBUF away because it may be identical to
-         OUTBUF.  */
-      memcpy(savebuf, inbuf, TWOFISH_BLOCKSIZE);
+      /* INBUF is needed later and it may be identical to OUTBUF, so store
+         the intermediate result to SAVEBUF.  */
+      burn = twofish_decrypt (ctx, savebuf, inbuf);
+      if (burn > burn_stack_depth)
+        burn_stack_depth = burn;
 
-      do_twofish_decrypt (ctx, outbuf, inbuf);
-
-      buf_xor(outbuf, outbuf, iv, TWOFISH_BLOCKSIZE);
-      memcpy(iv, savebuf, TWOFISH_BLOCKSIZE);
+      buf_xor_n_copy_2(outbuf, savebuf, iv, inbuf, TWOFISH_BLOCKSIZE);
       inbuf += TWOFISH_BLOCKSIZE;
       outbuf += TWOFISH_BLOCKSIZE;
     }
@@ -1051,13 +1080,10 @@ _gcry_twofish_cfb_dec(void *context, unsigned char *iv, void *outbuf_arg,
   TWOFISH_context *ctx = context;
   unsigned char *outbuf = outbuf_arg;
   const unsigned char *inbuf = inbuf_arg;
-  int burn_stack_depth = 24 + 3 * sizeof (void*);
+  unsigned int burn, burn_stack_depth = 0;
 
 #ifdef USE_AMD64_ASM
   {
-    if (nblocks >= 3 && burn_stack_depth < 8 * sizeof(void*))
-      burn_stack_depth = 8 * sizeof(void*);
-
     /* Process data in 3 block chunks. */
     while (nblocks >= 3)
       {
@@ -1066,6 +1092,10 @@ _gcry_twofish_cfb_dec(void *context, unsigned char *iv, void *outbuf_arg,
         nblocks -= 3;
         outbuf += 3 * TWOFISH_BLOCKSIZE;
         inbuf += 3 * TWOFISH_BLOCKSIZE;
+
+        burn = 8 * sizeof(void*);
+        if (burn > burn_stack_depth)
+          burn_stack_depth = burn;
       }
 
     /* Use generic code to handle smaller chunks... */
@@ -1074,7 +1104,10 @@ _gcry_twofish_cfb_dec(void *context, unsigned char *iv, void *outbuf_arg,
 
   for ( ;nblocks; nblocks-- )
     {
-      do_twofish_encrypt(ctx, iv, iv);
+      burn = twofish_encrypt(ctx, iv, iv);
+      if (burn > burn_stack_depth)
+        burn_stack_depth = burn;
+
       buf_xor_n_copy(outbuf, iv, inbuf, TWOFISH_BLOCKSIZE);
       outbuf += TWOFISH_BLOCKSIZE;
       inbuf += TWOFISH_BLOCKSIZE;

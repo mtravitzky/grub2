@@ -375,6 +375,13 @@ gcry_cipher_open (gcry_cipher_hd_t *handle,
   if (! err)
     switch (mode)
       {
+      case GCRY_CIPHER_MODE_CCM:
+	if (spec->blocksize != GCRY_CCM_BLOCK_LEN)
+	  err = GPG_ERR_INV_CIPHER_MODE;
+	if (!spec->encrypt || !spec->decrypt)
+	  err = GPG_ERR_INV_CIPHER_MODE;
+	break;
+
       case GCRY_CIPHER_MODE_ECB:
       case GCRY_CIPHER_MODE_CBC:
       case GCRY_CIPHER_MODE_CFB:
@@ -613,14 +620,17 @@ cipher_reset (gcry_cipher_hd_t c)
   memset (c->u_iv.iv, 0, c->spec->blocksize);
   memset (c->lastiv, 0, c->spec->blocksize);
   memset (c->u_ctr.ctr, 0, c->spec->blocksize);
+  memset (&c->u_mode, 0, sizeof c->u_mode);
+  c->unused = 0;
 }
 
 
 
 static gcry_err_code_t
-do_ecb_encrypt (gcry_cipher_hd_t c,
-                unsigned char *outbuf, unsigned int outbuflen,
-                const unsigned char *inbuf, unsigned int inbuflen)
+do_ecb_crypt (gcry_cipher_hd_t c,
+              unsigned char *outbuf, unsigned int outbuflen,
+              const unsigned char *inbuf, unsigned int inbuflen,
+              gcry_cipher_encrypt_t crypt_fn)
 {
   unsigned int blocksize = c->spec->blocksize;
   unsigned int n, nblocks;
@@ -631,12 +641,12 @@ do_ecb_encrypt (gcry_cipher_hd_t c,
   if ((inbuflen % blocksize))
     return GPG_ERR_INV_LENGTH;
 
-  nblocks = inbuflen / c->spec->blocksize;
+  nblocks = inbuflen / blocksize;
   burn = 0;
 
   for (n=0; n < nblocks; n++ )
     {
-      nburn = c->spec->encrypt (&c->context.c, outbuf, (byte*)/*arggg*/inbuf);
+      nburn = crypt_fn (&c->context.c, outbuf, inbuf);
       burn = nburn > burn ? nburn : burn;
       inbuf  += blocksize;
       outbuf += blocksize;
@@ -646,6 +656,14 @@ do_ecb_encrypt (gcry_cipher_hd_t c,
     _gcry_burn_stack (burn + 4 * sizeof(void *));
 
   return 0;
+}
+
+static gcry_err_code_t
+do_ecb_encrypt (gcry_cipher_hd_t c,
+                unsigned char *outbuf, unsigned int outbuflen,
+                const unsigned char *inbuf, unsigned int inbuflen)
+{
+  return do_ecb_crypt (c, outbuf, outbuflen, inbuf, inbuflen, c->spec->encrypt);
 }
 
 static gcry_err_code_t
@@ -653,30 +671,7 @@ do_ecb_decrypt (gcry_cipher_hd_t c,
                 unsigned char *outbuf, unsigned int outbuflen,
                 const unsigned char *inbuf, unsigned int inbuflen)
 {
-  unsigned int blocksize = c->spec->blocksize;
-  unsigned int n, nblocks;
-  unsigned int burn, nburn;
-
-  if (outbuflen < inbuflen)
-    return GPG_ERR_BUFFER_TOO_SHORT;
-  if ((inbuflen % blocksize))
-    return GPG_ERR_INV_LENGTH;
-
-  nblocks = inbuflen / c->spec->blocksize;
-  burn = 0;
-
-  for (n=0; n < nblocks; n++ )
-    {
-      nburn = c->spec->decrypt (&c->context.c, outbuf, (byte*)/*arggg*/inbuf);
-      burn = nburn > burn ? nburn : burn;
-      inbuf  += blocksize;
-      outbuf += blocksize;
-    }
-
-  if (burn > 0)
-    _gcry_burn_stack (burn + 4 * sizeof(void *));
-
-  return 0;
+  return do_ecb_crypt (c, outbuf, outbuflen, inbuf, inbuflen, c->spec->decrypt);
 }
 
 
@@ -716,6 +711,10 @@ cipher_encrypt (gcry_cipher_hd_t c, byte *outbuf, unsigned int outbuflen,
     case GCRY_CIPHER_MODE_AESWRAP:
       rc = _gcry_cipher_aeswrap_encrypt (c, outbuf, outbuflen,
                                          inbuf, inbuflen);
+      break;
+
+    case GCRY_CIPHER_MODE_CCM:
+      rc = _gcry_cipher_ccm_encrypt (c, outbuf, outbuflen, inbuf, inbuflen);
       break;
 
     case GCRY_CIPHER_MODE_STREAM:
@@ -799,7 +798,7 @@ cipher_decrypt (gcry_cipher_hd_t c, byte *outbuf, unsigned int outbuflen,
       break;
 
     case GCRY_CIPHER_MODE_OFB:
-      rc = _gcry_cipher_ofb_decrypt (c, outbuf, outbuflen, inbuf, inbuflen);
+      rc = _gcry_cipher_ofb_encrypt (c, outbuf, outbuflen, inbuf, inbuflen);
       break;
 
     case GCRY_CIPHER_MODE_CTR:
@@ -809,6 +808,10 @@ cipher_decrypt (gcry_cipher_hd_t c, byte *outbuf, unsigned int outbuflen,
     case GCRY_CIPHER_MODE_AESWRAP:
       rc = _gcry_cipher_aeswrap_decrypt (c, outbuf, outbuflen,
                                          inbuf, inbuflen);
+      break;
+
+    case GCRY_CIPHER_MODE_CCM:
+      rc = _gcry_cipher_ccm_decrypt (c, outbuf, outbuflen, inbuf, inbuflen);
       break;
 
     case GCRY_CIPHER_MODE_STREAM:
@@ -885,8 +888,19 @@ _gcry_cipher_setkey (gcry_cipher_hd_t hd, const void *key, size_t keylen)
 gcry_error_t
 _gcry_cipher_setiv (gcry_cipher_hd_t hd, const void *iv, size_t ivlen)
 {
-  cipher_setiv (hd, iv, ivlen);
-  return 0;
+  gcry_err_code_t rc = GPG_ERR_NO_ERROR;
+
+  switch (hd->mode)
+    {
+      case GCRY_CIPHER_MODE_CCM:
+        rc = _gcry_cipher_ccm_set_nonce (hd, iv, ivlen);
+        break;
+
+      default:
+        cipher_setiv (hd, iv, ivlen);
+        break;
+    }
+  return gpg_error (rc);
 }
 
 /* Set counter for CTR mode.  (CTR,CTRLEN) must denote a buffer of
@@ -908,6 +922,67 @@ _gcry_cipher_setctr (gcry_cipher_hd_t hd, const void *ctr, size_t ctrlen)
   else
     return gpg_error (GPG_ERR_INV_ARG);
   return 0;
+}
+
+gcry_error_t
+_gcry_cipher_authenticate (gcry_cipher_hd_t hd, const void *abuf,
+                           size_t abuflen)
+{
+  gcry_err_code_t rc;
+
+  switch (hd->mode)
+    {
+    case GCRY_CIPHER_MODE_CCM:
+      rc = _gcry_cipher_ccm_authenticate (hd, abuf, abuflen);
+      break;
+
+    default:
+      log_error ("gcry_cipher_authenticate: invalid mode %d\n", hd->mode);
+      rc = GPG_ERR_INV_CIPHER_MODE;
+      break;
+    }
+
+  return gpg_error (rc);
+}
+
+gcry_error_t
+_gcry_cipher_gettag (gcry_cipher_hd_t hd, void *outtag, size_t taglen)
+{
+  gcry_err_code_t rc;
+
+  switch (hd->mode)
+    {
+    case GCRY_CIPHER_MODE_CCM:
+      rc = _gcry_cipher_ccm_get_tag (hd, outtag, taglen);
+      break;
+
+    default:
+      log_error ("gcry_cipher_gettag: invalid mode %d\n", hd->mode);
+      rc = GPG_ERR_INV_CIPHER_MODE;
+      break;
+    }
+
+  return gpg_error (rc);
+}
+
+gcry_error_t
+_gcry_cipher_checktag (gcry_cipher_hd_t hd, const void *intag, size_t taglen)
+{
+  gcry_err_code_t rc;
+
+  switch (hd->mode)
+    {
+    case GCRY_CIPHER_MODE_CCM:
+      rc = _gcry_cipher_ccm_check_tag (hd, intag, taglen);
+      break;
+
+    default:
+      log_error ("gcry_cipher_checktag: invalid mode %d\n", hd->mode);
+      rc = GPG_ERR_INV_CIPHER_MODE;
+      break;
+    }
+
+  return gpg_error (rc);
 }
 
 
@@ -944,6 +1019,30 @@ gcry_cipher_ctl( gcry_cipher_hd_t h, int cmd, void *buffer, size_t buflen)
 	  h->flags |= GCRY_CIPHER_CBC_MAC;
       else
 	h->flags &= ~GCRY_CIPHER_CBC_MAC;
+      break;
+
+    case GCRYCTL_SET_CCM_LENGTHS:
+      {
+        size_t params[3];
+        size_t encryptedlen;
+        size_t aadlen;
+        size_t authtaglen;
+
+        if (h->mode != GCRY_CIPHER_MODE_CCM)
+          return gcry_error (GPG_ERR_INV_CIPHER_MODE);
+
+        if (!buffer || buflen != 3 * sizeof(size_t))
+          return gcry_error (GPG_ERR_INV_ARG);
+
+        /* This command is used to pass additional length parameters needed
+           by CCM mode to initialize CBC-MAC.  */
+        memcpy (params, buffer, sizeof(params));
+        encryptedlen = params[0];
+        aadlen = params[1];
+        authtaglen = params[2];
+
+        rc = _gcry_cipher_ccm_set_lengths (h, encryptedlen, aadlen, authtaglen);
+      }
       break;
 
     case GCRYCTL_DISABLE_ALGO:

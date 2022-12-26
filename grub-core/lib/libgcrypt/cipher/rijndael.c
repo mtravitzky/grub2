@@ -67,11 +67,11 @@
 # define USE_AMD64_ASM 1
 #endif
 
-/* USE_ARMV6_ASM indicates whether to use ARMv6 assembly code. */
-#undef USE_ARMV6_ASM
-#if defined(HAVE_ARM_ARCH_V6) && defined(__ARMEL__)
+/* USE_ARM_ASM indicates whether to use ARM assembly code. */
+#undef USE_ARM_ASM
+#if defined(__ARMEL__)
 # ifdef HAVE_COMPATIBLE_GCC_ARM_PLATFORM_AS
-#  define USE_ARMV6_ASM 1
+#  define USE_ARM_ASM 1
 # endif
 #endif
 
@@ -123,18 +123,18 @@ extern void _gcry_aes_amd64_decrypt_block(const void *keysched_dec,
 					  int rounds);
 #endif /*USE_AMD64_ASM*/
 
-#ifdef USE_ARMV6_ASM
-/* ARMv6 assembly implementations of AES */
-extern void _gcry_aes_armv6_encrypt_block(const void *keysched_enc,
+#ifdef USE_ARM_ASM
+/* ARM assembly implementations of AES */
+extern void _gcry_aes_arm_encrypt_block(const void *keysched_enc,
 					  unsigned char *out,
 					  const unsigned char *in,
 					  int rounds);
 
-extern void _gcry_aes_armv6_decrypt_block(const void *keysched_dec,
+extern void _gcry_aes_arm_decrypt_block(const void *keysched_dec,
 					  unsigned char *out,
 					  const unsigned char *in,
 					  int rounds);
-#endif /*USE_ARMV6_ASM*/
+#endif /*USE_ARM_ASM*/
 
 
 
@@ -567,8 +567,8 @@ do_encrypt_aligned (const RIJNDAEL_context *ctx,
 {
 #ifdef USE_AMD64_ASM
   _gcry_aes_amd64_encrypt_block(ctx->keyschenc, b, a, ctx->rounds);
-#elif defined(USE_ARMV6_ASM)
-  _gcry_aes_armv6_encrypt_block(ctx->keyschenc, b, a, ctx->rounds);
+#elif defined(USE_ARM_ASM)
+  _gcry_aes_arm_encrypt_block(ctx->keyschenc, b, a, ctx->rounds);
 #else
 #define rk (ctx->keyschenc)
   int rounds = ctx->rounds;
@@ -651,7 +651,7 @@ do_encrypt_aligned (const RIJNDAEL_context *ctx,
   *((u32_a_t*)(b+ 8)) ^= *((u32_a_t*)rk[rounds][2]);
   *((u32_a_t*)(b+12)) ^= *((u32_a_t*)rk[rounds][3]);
 #undef rk
-#endif /*!USE_AMD64_ASM && !USE_ARMV6_ASM*/
+#endif /*!USE_AMD64_ASM && !USE_ARM_ASM*/
 }
 
 
@@ -659,7 +659,7 @@ static void
 do_encrypt (const RIJNDAEL_context *ctx,
             unsigned char *bx, const unsigned char *ax)
 {
-#if !defined(USE_AMD64_ASM) && !defined(USE_ARMV6_ASM)
+#if !defined(USE_AMD64_ASM) && !defined(USE_ARM_ASM)
   /* BX and AX are not necessary correctly aligned.  Thus we might
      need to copy them here.  We try to align to a 16 bytes.  */
   if (((size_t)ax & 0x0f) || ((size_t)bx & 0x0f))
@@ -675,12 +675,12 @@ do_encrypt (const RIJNDAEL_context *ctx,
         byte b[16] ATTR_ALIGNED_16;
       } b;
 
-      memcpy (a.a, ax, 16);
+      buf_cpy (a.a, ax, 16);
       do_encrypt_aligned (ctx, b.b, a.a);
-      memcpy (bx, b.b, 16);
+      buf_cpy (bx, b.b, 16);
     }
   else
-#endif /*!USE_AMD64_ASM && !USE_ARMV6_ASM*/
+#endif /*!USE_AMD64_ASM && !USE_ARM_ASM*/
     {
       do_encrypt_aligned (ctx, bx, ax);
     }
@@ -1556,11 +1556,14 @@ _gcry_aes_cbc_enc (void *context, unsigned char *iv,
   RIJNDAEL_context *ctx = context;
   unsigned char *outbuf = outbuf_arg;
   const unsigned char *inbuf = inbuf_arg;
+  unsigned char *last_iv;
 
 #ifdef USE_AESNI
   if (ctx->use_aesni)
     aesni_prepare ();
 #endif /*USE_AESNI*/
+
+  last_iv = iv;
 
   for ( ;nblocks; nblocks-- )
     {
@@ -1576,24 +1579,17 @@ _gcry_aes_cbc_enc (void *context, unsigned char *iv,
                         "pxor %%xmm0, %%xmm1\n\t"
                         "movdqu %%xmm1, %[outbuf]\n\t"
                         : /* No output */
-                        : [iv] "m" (*iv),
+                        : [iv] "m" (*last_iv),
                           [inbuf] "m" (*inbuf),
                           [outbuf] "m" (*outbuf)
                         : "memory" );
 
           do_aesni (ctx, 0, outbuf, outbuf);
-
-          asm volatile ("movdqu %[outbuf], %%xmm0\n\t"
-                        "movdqu %%xmm0, %[iv]\n\t"
-                        : /* No output */
-                        : [outbuf] "m" (*outbuf),
-                          [iv] "m" (*iv)
-                        : "memory" );
         }
 #endif /*USE_AESNI*/
       else
         {
-          buf_xor(outbuf, inbuf, iv, BLOCKSIZE);
+          buf_xor(outbuf, inbuf, last_iv, BLOCKSIZE);
 
           if (0)
             ;
@@ -1603,18 +1599,34 @@ _gcry_aes_cbc_enc (void *context, unsigned char *iv,
 #endif /*USE_PADLOCK*/
           else
             do_encrypt (ctx, outbuf, outbuf );
-
-          memcpy (iv, outbuf, BLOCKSIZE);
         }
 
+      last_iv = outbuf;
       inbuf += BLOCKSIZE;
       if (!cbc_mac)
         outbuf += BLOCKSIZE;
     }
 
+  if (last_iv != iv)
+    {
+      if (0)
+        ;
 #ifdef USE_AESNI
-  if (ctx->use_aesni)
-    aesni_cleanup ();
+      else if (ctx->use_aesni)
+        asm volatile ("movdqu %[last], %%xmm0\n\t"
+                      "movdqu %%xmm0, %[iv]\n\t"
+                      : /* No output */
+                      : [last] "m" (*last_iv),
+                        [iv] "m" (*iv)
+                      : "memory" );
+#endif /*USE_AESNI*/
+      else
+        buf_cpy (iv, last_iv, BLOCKSIZE);
+    }
+
+#ifdef USE_AESNI
+   if (ctx->use_aesni)
+      aesni_cleanup ();
 #endif /*USE_AESNI*/
 
   _gcry_burn_stack (48 + 2*sizeof(int));
@@ -1694,8 +1706,8 @@ do_decrypt_aligned (RIJNDAEL_context *ctx,
 {
 #ifdef USE_AMD64_ASM
   _gcry_aes_amd64_decrypt_block(ctx->keyschdec, b, a, ctx->rounds);
-#elif defined(USE_ARMV6_ASM)
-  _gcry_aes_armv6_decrypt_block(ctx->keyschdec, b, a, ctx->rounds);
+#elif defined(USE_ARM_ASM)
+  _gcry_aes_arm_decrypt_block(ctx->keyschdec, b, a, ctx->rounds);
 #else
 #define rk  (ctx->keyschdec)
   int rounds = ctx->rounds;
@@ -1779,7 +1791,7 @@ do_decrypt_aligned (RIJNDAEL_context *ctx,
   *((u32_a_t*)(b+ 8)) ^= *((u32_a_t*)rk[0][2]);
   *((u32_a_t*)(b+12)) ^= *((u32_a_t*)rk[0][3]);
 #undef rk
-#endif /*!USE_AMD64_ASM && !USE_ARMV6_ASM*/
+#endif /*!USE_AMD64_ASM && !USE_ARM_ASM*/
 }
 
 
@@ -1794,7 +1806,7 @@ do_decrypt (RIJNDAEL_context *ctx, byte *bx, const byte *ax)
       ctx->decryption_prepared = 1;
     }
 
-#if !defined(USE_AMD64_ASM) && !defined(USE_ARMV6_ASM)
+#if !defined(USE_AMD64_ASM) && !defined(USE_ARM_ASM)
   /* BX and AX are not necessary correctly aligned.  Thus we might
      need to copy them here.  We try to align to a 16 bytes. */
   if (((size_t)ax & 0x0f) || ((size_t)bx & 0x0f))
@@ -1810,12 +1822,12 @@ do_decrypt (RIJNDAEL_context *ctx, byte *bx, const byte *ax)
         byte b[16] ATTR_ALIGNED_16;
       } b;
 
-      memcpy (a.a, ax, 16);
+      buf_cpy (a.a, ax, 16);
       do_decrypt_aligned (ctx, b.b, a.a);
-      memcpy (bx, b.b, 16);
+      buf_cpy (bx, b.b, 16);
     }
   else
-#endif /*!USE_AMD64_ASM && !USE_ARMV6_ASM*/
+#endif /*!USE_AMD64_ASM && !USE_ARM_ASM*/
     {
       do_decrypt_aligned (ctx, bx, ax);
     }
@@ -2068,21 +2080,19 @@ _gcry_aes_cbc_dec (void *context, unsigned char *iv,
   else
     for ( ;nblocks; nblocks-- )
       {
-        /* We need to save INBUF away because it may be identical to
-           OUTBUF.  */
-        memcpy (savebuf, inbuf, BLOCKSIZE);
+        /* INBUF is needed later and it may be identical to OUTBUF, so store
+           the intermediate result to SAVEBUF.  */
 
         if (0)
           ;
 #ifdef USE_PADLOCK
         else if (ctx->use_padlock)
-          do_padlock (ctx, 1, outbuf, inbuf);
+          do_padlock (ctx, 1, savebuf, inbuf);
 #endif /*USE_PADLOCK*/
         else
-          do_decrypt (ctx, outbuf, inbuf);
+          do_decrypt (ctx, savebuf, inbuf);
 
-        buf_xor(outbuf, outbuf, iv, BLOCKSIZE);
-        memcpy (iv, savebuf, BLOCKSIZE);
+        buf_xor_n_copy_2(outbuf, savebuf, iv, inbuf, BLOCKSIZE);
         inbuf += BLOCKSIZE;
         outbuf += BLOCKSIZE;
       }
