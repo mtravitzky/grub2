@@ -97,6 +97,8 @@ crc64_final (void *context __attribute__ ((unused)))
 
 gcry_md_spec_t _gcry_digest_spec_crc64 =
   {
+    /* FIXME: do we care this ?? */
+    0, {0, 0},
     "CRC64", 0, 0, 0, 8,
     crc64_init, crc64_write, crc64_final, crc64_read,
     sizeof (grub_uint64_t),
