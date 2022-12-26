@@ -18,5 +18,6 @@
 /^typedef struct gcry_sexp \*gcry_sexp_t;/ d
 /^struct gcry_md_context;/ d
 /^typedef struct gcry_md_handle\s*$/,/^} \*gcry_md_hd_t;/ d
+s,_GCRT_GCC_VERSION,_GCRY_GCC_VERSION,g
 s,_gcry_mpi_invm,gcry_mpi_invm,g
 p
