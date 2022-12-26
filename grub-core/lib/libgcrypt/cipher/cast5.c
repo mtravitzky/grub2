@@ -564,7 +564,7 @@ decrypt_block (void *context, byte *outbuf, const byte *inbuf)
    of size CAST5_BLOCKSIZE. */
 void
 _gcry_cast5_ctr_enc(void *context, unsigned char *ctr, void *outbuf_arg,
-		    const void *inbuf_arg, unsigned int nblocks)
+		    const void *inbuf_arg, size_t nblocks)
 {
   CAST5_context *ctx = context;
   unsigned char *outbuf = outbuf_arg;
@@ -635,7 +635,7 @@ _gcry_cast5_ctr_enc(void *context, unsigned char *ctr, void *outbuf_arg,
    intended for the bulk encryption feature of cipher.c. */
 void
 _gcry_cast5_cbc_dec(void *context, unsigned char *iv, void *outbuf_arg,
-		    const void *inbuf_arg, unsigned int nblocks)
+		    const void *inbuf_arg, size_t nblocks)
 {
   CAST5_context *ctx = context;
   unsigned char *outbuf = outbuf_arg;
@@ -695,7 +695,7 @@ _gcry_cast5_cbc_dec(void *context, unsigned char *iv, void *outbuf_arg,
    intended for the bulk encryption feature of cipher.c. */
 void
 _gcry_cast5_cfb_dec(void *context, unsigned char *iv, void *outbuf_arg,
-		    const void *inbuf_arg, unsigned int nblocks)
+		    const void *inbuf_arg, size_t nblocks)
 {
   CAST5_context *ctx = context;
   unsigned char *outbuf = outbuf_arg;
@@ -796,10 +796,13 @@ static const char*
 selftest(void)
 {
     CAST5_context c;
-    byte key[16]  = { 0x01, 0x23, 0x45, 0x67, 0x12, 0x34, 0x56, 0x78,
+    static const byte key[16] =
+                    { 0x01, 0x23, 0x45, 0x67, 0x12, 0x34, 0x56, 0x78,
 		      0x23, 0x45, 0x67, 0x89, 0x34, 0x56, 0x78, 0x9A  };
-    byte plain[8] = { 0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF };
-    byte cipher[8]= { 0x23, 0x8B, 0x4F, 0xE5, 0x84, 0x7E, 0x44, 0xB2 };
+    static const byte plain[8] =
+                    { 0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF };
+    static const byte cipher[8] =
+                    { 0x23, 0x8B, 0x4F, 0xE5, 0x84, 0x7E, 0x44, 0xB2 };
     byte buffer[8];
     const char *r;
 
@@ -959,9 +962,9 @@ do_cast_setkey( CAST5_context *c, const byte *key, unsigned keylen )
     }
 #endif
 
-  memset(&x,0, sizeof x);
-  memset(&z,0, sizeof z);
-  memset(&k,0, sizeof k);
+  wipememory(x, sizeof x);
+  wipememory(z, sizeof z);
+  wipememory(k, sizeof k);
 
 #undef xi
 #undef zi
@@ -973,7 +976,6 @@ cast_setkey (void *context, const byte *key, unsigned keylen )
 {
   CAST5_context *c = (CAST5_context *) context;
   gcry_err_code_t rc = do_cast_setkey (c, key, keylen);
-  _gcry_burn_stack (96+7*sizeof(void*));
   return rc;
 }
 

@@ -94,6 +94,20 @@
 #define gcry_cipher_mode_from_oid   _gcry_cipher_mode_from_oid
 #define gcry_cipher_open            _gcry_cipher_open
 
+#define gcry_mac_algo_info          _gcry_mac_algo_info
+#define gcry_mac_algo_name          _gcry_mac_algo_name
+#define gcry_mac_map_name           _gcry_mac_map_name
+#define gcry_mac_get_algo_maclen    _gcry_mac_get_algo_maclen
+#define gcry_mac_get_algo_keylen    _gcry_mac_get_algo_keylen
+#define gcry_mac_open               _gcry_mac_open
+#define gcry_mac_close              _gcry_mac_close
+#define gcry_mac_setkey             _gcry_mac_setkey
+#define gcry_mac_setiv              _gcry_mac_setiv
+#define gcry_mac_write              _gcry_mac_write
+#define gcry_mac_read               _gcry_mac_read
+#define gcry_mac_verify             _gcry_mac_verify
+#define gcry_mac_ctl                _gcry_mac_ctl
+
 #define gcry_pk_algo_info           _gcry_pk_algo_info
 #define gcry_pk_algo_name           _gcry_pk_algo_name
 #define gcry_pk_ctl                 _gcry_pk_ctl
@@ -313,6 +327,20 @@ gcry_err_code_t gcry_md_get (gcry_md_hd_t hd, int algo,
 #undef gcry_cipher_mode_from_oid
 #undef gcry_cipher_open
 
+#undef gcry_mac_algo_info
+#undef gcry_mac_algo_name
+#undef gcry_mac_map_name
+#undef gcry_mac_get_algo_maclen
+#undef gcry_mac_get_algo_keylen
+#undef gcry_mac_open
+#undef gcry_mac_close
+#undef gcry_mac_setkey
+#undef gcry_mac_setiv
+#undef gcry_mac_write
+#undef gcry_mac_read
+#undef gcry_mac_verify
+#undef gcry_mac_ctl
+
 #undef gcry_pk_algo_info
 #undef gcry_pk_algo_name
 #undef gcry_pk_ctl
@@ -493,6 +521,20 @@ MARK_VISIBLE (gcry_cipher_map_name)
 MARK_VISIBLE (gcry_cipher_mode_from_oid)
 MARK_VISIBLE (gcry_cipher_open)
 
+MARK_VISIBLE (gcry_mac_algo_info)
+MARK_VISIBLE (gcry_mac_algo_name)
+MARK_VISIBLE (gcry_mac_map_name)
+MARK_VISIBLE (gcry_mac_get_algo_maclen)
+MARK_VISIBLE (gcry_mac_get_algo_keylen)
+MARK_VISIBLE (gcry_mac_open)
+MARK_VISIBLE (gcry_mac_close)
+MARK_VISIBLE (gcry_mac_setkey)
+MARK_VISIBLE (gcry_mac_setiv)
+MARK_VISIBLE (gcry_mac_write)
+MARK_VISIBLE (gcry_mac_read)
+MARK_VISIBLE (gcry_mac_verify)
+MARK_VISIBLE (gcry_mac_ctl)
+
 MARK_VISIBLE (gcry_pk_algo_info)
 MARK_VISIBLE (gcry_pk_algo_name)
 MARK_VISIBLE (gcry_pk_ctl)
@@ -603,6 +645,7 @@ MARK_VISIBLE (gcry_mpi_set_bit)
 MARK_VISIBLE (gcry_mpi_set_flag)
 MARK_VISIBLE (gcry_mpi_set_highbit)
 MARK_VISIBLE (gcry_mpi_set_opaque)
+MARK_VISIBLEX(gcry_mpi_set_opaque_copy)
 MARK_VISIBLE (gcry_mpi_set_ui)
 MARK_VISIBLE (gcry_mpi_snew)
 MARK_VISIBLE (gcry_mpi_sub)
@@ -632,8 +675,8 @@ MARK_VISIBLEX(_gcry_mpi_get_const)
    between a public and an internal version is that the internal
    version use gpg_err_code_t and the public version gpg_error_t.  */
 
-#define gcry_sexp_extract_param _gcry_USE_THE_UNDERSCORED_FUNCTION
-
+#define gcry_sexp_extract_param   _gcry_USE_THE_UNDERSCORED_FUNCTION
+#define gcry_mpi_set_opaque_copy  _gcry_USE_THE_UNDERSCORED_FUNCTION
 
 #endif /*!_GCRY_INCLUDED_BY_VISIBILITY_C*/
 

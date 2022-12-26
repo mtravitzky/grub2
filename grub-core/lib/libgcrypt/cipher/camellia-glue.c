@@ -90,13 +90,13 @@
 
 typedef struct
 {
-  int keybitlength;
   KEY_TABLE_TYPE keytable;
+  int keybitlength;
 #ifdef USE_AESNI_AVX
-  int use_aesni_avx;		/* AES-NI/AVX implementation shall be used.  */
+  unsigned int use_aesni_avx:1;	/* AES-NI/AVX implementation shall be used.  */
 #endif /*USE_AESNI_AVX*/
 #ifdef USE_AESNI_AVX2
-  int use_aesni_avx2;		/* AES-NI/AVX2 implementation shall be used.  */
+  unsigned int use_aesni_avx2:1;/* AES-NI/AVX2 implementation shall be used.  */
 #endif /*USE_AESNI_AVX2*/
 } CAMELLIA_context;
 
@@ -118,6 +118,10 @@ extern void _gcry_camellia_aesni_avx_cfb_dec(CAMELLIA_context *ctx,
 					     unsigned char *out,
 					     const unsigned char *in,
 					     unsigned char *iv);
+
+extern void _gcry_camellia_aesni_avx_keygen(CAMELLIA_context *ctx,
+					    const unsigned char *key,
+					    unsigned int keylen);
 #endif
 
 #ifdef USE_AESNI_AVX2
@@ -148,6 +152,9 @@ camellia_setkey(void *c, const byte *key, unsigned keylen)
   CAMELLIA_context *ctx=c;
   static int initialized=0;
   static const char *selftest_failed=NULL;
+#if defined(USE_AESNI_AVX) || defined(USE_AESNI_AVX2)
+  unsigned int hwf = _gcry_get_hw_features ();
+#endif
 
   if(keylen!=16 && keylen!=24 && keylen!=32)
     return GPG_ERR_INV_KEYLEN;
@@ -163,39 +170,38 @@ camellia_setkey(void *c, const byte *key, unsigned keylen)
   if(selftest_failed)
     return GPG_ERR_SELFTEST_FAILED;
 
-  ctx->keybitlength=keylen*8;
-  Camellia_Ekeygen(ctx->keybitlength,key,ctx->keytable);
-  _gcry_burn_stack
-    ((19+34+34)*sizeof(u32)+2*sizeof(void*) /* camellia_setup256 */
-     +(4+32)*sizeof(u32)+2*sizeof(void*)    /* camellia_setup192 */
-     +0+sizeof(int)+2*sizeof(void*)         /* Camellia_Ekeygen */
-     +3*2*sizeof(void*)                     /* Function calls.  */
-     );
-
 #ifdef USE_AESNI_AVX
-  ctx->use_aesni_avx = 0;
-  if ((_gcry_get_hw_features () & HWF_INTEL_AESNI) &&
-      (_gcry_get_hw_features () & HWF_INTEL_AVX))
-    {
-      ctx->use_aesni_avx = 1;
-    }
+  ctx->use_aesni_avx = (hwf & HWF_INTEL_AESNI) && (hwf & HWF_INTEL_AVX);
+#endif
+#ifdef USE_AESNI_AVX2
+  ctx->use_aesni_avx2 = (hwf & HWF_INTEL_AESNI) && (hwf & HWF_INTEL_AVX2);
 #endif
 
-#ifdef USE_AESNI_AVX2
-  ctx->use_aesni_avx2 = 0;
-  if ((_gcry_get_hw_features () & HWF_INTEL_AESNI) &&
-      (_gcry_get_hw_features () & HWF_INTEL_AVX2))
-    {
-      ctx->use_aesni_avx2 = 1;
-    }
+  ctx->keybitlength=keylen*8;
+
+  if (0)
+    { }
+#ifdef USE_AESNI_AVX
+  else if (ctx->use_aesni_avx)
+    _gcry_camellia_aesni_avx_keygen(ctx, key, keylen);
+  else
 #endif
+    {
+      Camellia_Ekeygen(ctx->keybitlength,key,ctx->keytable);
+      _gcry_burn_stack
+        ((19+34+34)*sizeof(u32)+2*sizeof(void*) /* camellia_setup256 */
+         +(4+32)*sizeof(u32)+2*sizeof(void*)    /* camellia_setup192 */
+         +0+sizeof(int)+2*sizeof(void*)         /* Camellia_Ekeygen */
+         +3*2*sizeof(void*)                     /* Function calls.  */
+         );
+    }
 
   return 0;
 }
 
 #ifdef USE_ARM_ASM
 
-/* Assembly implementations of CAST5. */
+/* Assembly implementations of Camellia. */
 extern void _gcry_camellia_arm_encrypt_block(const KEY_TABLE_TYPE keyTable,
 					       byte *outbuf, const byte *inbuf,
 					       const int keybits);
@@ -284,7 +290,7 @@ camellia_decrypt(void *c, byte *outbuf, const byte *inbuf)
 void
 _gcry_camellia_ctr_enc(void *context, unsigned char *ctr,
                        void *outbuf_arg, const void *inbuf_arg,
-                       unsigned int nblocks)
+                       size_t nblocks)
 {
   CAMELLIA_context *ctx = context;
   unsigned char *outbuf = outbuf_arg;
@@ -376,7 +382,7 @@ _gcry_camellia_ctr_enc(void *context, unsigned char *ctr,
 void
 _gcry_camellia_cbc_dec(void *context, unsigned char *iv,
                        void *outbuf_arg, const void *inbuf_arg,
-                       unsigned int nblocks)
+                       size_t nblocks)
 {
   CAMELLIA_context *ctx = context;
   unsigned char *outbuf = outbuf_arg;
@@ -459,7 +465,7 @@ _gcry_camellia_cbc_dec(void *context, unsigned char *iv,
 void
 _gcry_camellia_cfb_dec(void *context, unsigned char *iv,
                        void *outbuf_arg, const void *inbuf_arg,
-                       unsigned int nblocks)
+                       size_t nblocks)
 {
   CAMELLIA_context *ctx = context;
   unsigned char *outbuf = outbuf_arg;
@@ -537,7 +543,7 @@ _gcry_camellia_cfb_dec(void *context, unsigned char *iv,
 static const char*
 selftest_ctr_128 (void)
 {
-  const int nblocks = 32+1;
+  const int nblocks = 32+16+1;
   const int blocksize = CAMELLIA_BLOCK_SIZE;
   const int context_size = sizeof(CAMELLIA_context);
 
@@ -551,7 +557,7 @@ selftest_ctr_128 (void)
 static const char*
 selftest_cbc_128 (void)
 {
-  const int nblocks = 32+2;
+  const int nblocks = 32+16+2;
   const int blocksize = CAMELLIA_BLOCK_SIZE;
   const int context_size = sizeof(CAMELLIA_context);
 
@@ -565,7 +571,7 @@ selftest_cbc_128 (void)
 static const char*
 selftest_cfb_128 (void)
 {
-  const int nblocks = 32+2;
+  const int nblocks = 32+16+2;
   const int blocksize = CAMELLIA_BLOCK_SIZE;
   const int context_size = sizeof(CAMELLIA_context);
 
@@ -582,38 +588,38 @@ selftest(void)
   const char *r;
 
   /* These test vectors are from RFC-3713 */
-  const byte plaintext[]=
+  static const byte plaintext[]=
     {
       0x01,0x23,0x45,0x67,0x89,0xab,0xcd,0xef,
       0xfe,0xdc,0xba,0x98,0x76,0x54,0x32,0x10
     };
-  const byte key_128[]=
+  static const byte key_128[]=
     {
       0x01,0x23,0x45,0x67,0x89,0xab,0xcd,0xef,
       0xfe,0xdc,0xba,0x98,0x76,0x54,0x32,0x10
     };
-  const byte ciphertext_128[]=
+  static const byte ciphertext_128[]=
     {
       0x67,0x67,0x31,0x38,0x54,0x96,0x69,0x73,
       0x08,0x57,0x06,0x56,0x48,0xea,0xbe,0x43
     };
-  const byte key_192[]=
+  static const byte key_192[]=
     {
       0x01,0x23,0x45,0x67,0x89,0xab,0xcd,0xef,0xfe,0xdc,0xba,0x98,
       0x76,0x54,0x32,0x10,0x00,0x11,0x22,0x33,0x44,0x55,0x66,0x77
     };
-  const byte ciphertext_192[]=
+  static const byte ciphertext_192[]=
     {
       0xb4,0x99,0x34,0x01,0xb3,0xe9,0x96,0xf8,
       0x4e,0xe5,0xce,0xe7,0xd7,0x9b,0x09,0xb9
     };
-  const byte key_256[]=
+  static const byte key_256[]=
     {
       0x01,0x23,0x45,0x67,0x89,0xab,0xcd,0xef,0xfe,0xdc,0xba,
       0x98,0x76,0x54,0x32,0x10,0x00,0x11,0x22,0x33,0x44,0x55,
       0x66,0x77,0x88,0x99,0xaa,0xbb,0xcc,0xdd,0xee,0xff
     };
-  const byte ciphertext_256[]=
+  static const byte ciphertext_256[]=
     {
       0x9a,0xcc,0x23,0x7d,0xff,0x16,0xd7,0x6c,
       0x20,0xef,0x7c,0x91,0x9e,0x3a,0x75,0x09

@@ -35,6 +35,21 @@
 # define NEED_16BYTE_ALIGNED_CONTEXT 1
 #endif
 
+/* Undef this symbol to trade GCM speed for 256 bytes of memory per context */
+#define GCM_USE_TABLES 1
+
+
+/* GCM_USE_INTEL_PCLMUL inidicates whether to compile GCM with Intel PCLMUL
+   code.  */
+#undef GCM_USE_INTEL_PCLMUL
+#if defined(ENABLE_PCLMUL_SUPPORT) && defined(GCM_USE_TABLES)
+# if ((defined(__i386__) && SIZEOF_UNSIGNED_LONG == 4) || defined(__x86_64__))
+#  if __GNUC__ >= 4
+#   define GCM_USE_INTEL_PCLMUL 1
+#  endif
+# endif
+#endif /* GCM_USE_INTEL_PCLMUL */
+
 
 /* A VIA processor with the Padlock engine as well as the Intel AES_NI
    instructions require an alignment of most data on a 16 byte
@@ -74,19 +89,19 @@ struct gcry_cipher_handle
   struct {
     void (*cfb_enc)(void *context, unsigned char *iv,
                     void *outbuf_arg, const void *inbuf_arg,
-                    unsigned int nblocks);
+                    size_t nblocks);
     void (*cfb_dec)(void *context, unsigned char *iv,
                     void *outbuf_arg, const void *inbuf_arg,
-                    unsigned int nblocks);
+                    size_t nblocks);
     void (*cbc_enc)(void *context, unsigned char *iv,
                     void *outbuf_arg, const void *inbuf_arg,
-                    unsigned int nblocks, int cbc_mac);
+                    size_t nblocks, int cbc_mac);
     void (*cbc_dec)(void *context, unsigned char *iv,
                     void *outbuf_arg, const void *inbuf_arg,
-                    unsigned int nblocks);
+                    size_t nblocks);
     void (*ctr_enc)(void *context, unsigned char *iv,
                     void *outbuf_arg, const void *inbuf_arg,
-                    unsigned int nblocks);
+                    size_t nblocks);
   } bulk;
 
 
@@ -96,6 +111,7 @@ struct gcry_cipher_handle
   struct {
     unsigned int key:1; /* Set to 1 if a key has been set.  */
     unsigned int iv:1;  /* Set to 1 if a IV has been set.  */
+    unsigned int tag:1; /* Set to 1 if a tag is finalized. */
   } marks;
 
   /* The initialization vector.  For best performance we make sure
@@ -134,8 +150,66 @@ struct gcry_cipher_handle
       unsigned int nonce:1;/* Set to 1 if nonce has been set.  */
       unsigned int lengths:1; /* Set to 1 if CCM length parameters has been
                                  processed.  */
-      unsigned int tag:1; /* Set to 1 if tag has been finalized.  */
     } ccm;
+
+    /* Mode specific storage for CMAC mode. */
+    struct {
+      unsigned int tag:1; /* Set to 1 if tag has been finalized.  */
+
+      /* Subkeys for tag creation, not cleared by gcry_cipher_reset. */
+      unsigned char subkeys[2][MAX_BLOCKSIZE];
+    } cmac;
+
+    /* Mode specific storage for GCM mode. */
+    struct {
+      /* The interim tag for GCM mode.  */
+      union {
+        cipher_context_alignment_t iv_align;
+        unsigned char tag[MAX_BLOCKSIZE];
+      } u_tag;
+
+      /* Space to save partial input lengths for MAC. */
+      unsigned char macbuf[GCRY_CCM_BLOCK_LEN];
+      int mac_unused;  /* Number of unprocessed bytes in MACBUF. */
+
+      /* byte counters for GCM */
+      u32 aadlen[2];
+      u32 datalen[2];
+
+      /* encrypted tag counter */
+      unsigned char tagiv[MAX_BLOCKSIZE];
+
+      unsigned int ghash_data_finalized:1;
+      unsigned int ghash_aad_finalized:1;
+
+      unsigned int datalen_over_limits:1;
+      unsigned int disallow_encryption_because_of_setiv_in_fips_mode:1;
+
+      /* --- Following members are not cleared in gcry_cipher_reset --- */
+
+      /* GHASH multiplier from key.  */
+      union {
+        cipher_context_alignment_t iv_align;
+        unsigned char key[MAX_BLOCKSIZE];
+      } u_ghash_key;
+
+#ifdef GCM_USE_INTEL_PCLMUL
+      /* Use Intel PCLMUL instructions for accelerated GHASH. */
+      unsigned int use_intel_pclmul:1;
+#endif
+
+      /* Pre-calculated table for GCM. */
+#ifdef GCM_USE_TABLES
+ #if defined(HAVE_U64_TYPEDEF) && (SIZEOF_UNSIGNED_LONG == 8 \
+                                   || defined(__x86_64__))
+      #define GCM_TABLES_USE_U64 1
+      u64 gcm_table[2 * 16];
+ #else
+      #undef GCM_TABLES_USE_U64
+      u32 gcm_table[4 * 16];
+ #endif
+#endif
+    } gcm;
   } u_mode;
 
   /* What follows are two contexts of the cipher in use.  The first
@@ -150,57 +224,57 @@ struct gcry_cipher_handle
 /*-- cipher-cbc.c --*/
 gcry_err_code_t _gcry_cipher_cbc_encrypt
 /*           */ (gcry_cipher_hd_t c,
-                 unsigned char *outbuf, unsigned int outbuflen,
-                 const unsigned char *inbuf, unsigned int inbuflen);
+                 unsigned char *outbuf, size_t outbuflen,
+                 const unsigned char *inbuf, size_t inbuflen);
 gcry_err_code_t _gcry_cipher_cbc_decrypt
 /*           */ (gcry_cipher_hd_t c,
-                 unsigned char *outbuf, unsigned int outbuflen,
-                 const unsigned char *inbuf, unsigned int inbuflen);
+                 unsigned char *outbuf, size_t outbuflen,
+                 const unsigned char *inbuf, size_t inbuflen);
 
 /*-- cipher-cfb.c --*/
 gcry_err_code_t _gcry_cipher_cfb_encrypt
 /*           */ (gcry_cipher_hd_t c,
-                 unsigned char *outbuf, unsigned int outbuflen,
-                 const unsigned char *inbuf, unsigned int inbuflen);
+                 unsigned char *outbuf, size_t outbuflen,
+                 const unsigned char *inbuf, size_t inbuflen);
 gcry_err_code_t _gcry_cipher_cfb_decrypt
 /*           */ (gcry_cipher_hd_t c,
-                 unsigned char *outbuf, unsigned int outbuflen,
-                 const unsigned char *inbuf, unsigned int inbuflen);
+                 unsigned char *outbuf, size_t outbuflen,
+                 const unsigned char *inbuf, size_t inbuflen);
 
 
 /*-- cipher-ofb.c --*/
 gcry_err_code_t _gcry_cipher_ofb_encrypt
 /*           */ (gcry_cipher_hd_t c,
-                 unsigned char *outbuf, unsigned int outbuflen,
-                 const unsigned char *inbuf, unsigned int inbuflen);
+                 unsigned char *outbuf, size_t outbuflen,
+                 const unsigned char *inbuf, size_t inbuflen);
 
 /*-- cipher-ctr.c --*/
 gcry_err_code_t _gcry_cipher_ctr_encrypt
 /*           */ (gcry_cipher_hd_t c,
-                 unsigned char *outbuf, unsigned int outbuflen,
-                 const unsigned char *inbuf, unsigned int inbuflen);
+                 unsigned char *outbuf, size_t outbuflen,
+                 const unsigned char *inbuf, size_t inbuflen);
 
 
 /*-- cipher-aeswrap.c --*/
 gcry_err_code_t _gcry_cipher_aeswrap_encrypt
 /*           */   (gcry_cipher_hd_t c,
-                   byte *outbuf, unsigned int outbuflen,
-                   const byte *inbuf, unsigned int inbuflen);
+                   byte *outbuf, size_t outbuflen,
+                   const byte *inbuf, size_t inbuflen);
 gcry_err_code_t _gcry_cipher_aeswrap_decrypt
 /*           */   (gcry_cipher_hd_t c,
-                   byte *outbuf, unsigned int outbuflen,
-                   const byte *inbuf, unsigned int inbuflen);
+                   byte *outbuf, size_t outbuflen,
+                   const byte *inbuf, size_t inbuflen);
 
 
 /*-- cipher-ccm.c --*/
 gcry_err_code_t _gcry_cipher_ccm_encrypt
 /*           */ (gcry_cipher_hd_t c,
-                 unsigned char *outbuf, unsigned int outbuflen,
-                 const unsigned char *inbuf, unsigned int inbuflen);
+                 unsigned char *outbuf, size_t outbuflen,
+                 const unsigned char *inbuf, size_t inbuflen);
 gcry_err_code_t _gcry_cipher_ccm_decrypt
 /*           */ (gcry_cipher_hd_t c,
-                 unsigned char *outbuf, unsigned int outbuflen,
-                 const unsigned char *inbuf, unsigned int inbuflen);
+                 unsigned char *outbuf, size_t outbuflen,
+                 const unsigned char *inbuf, size_t inbuflen);
 gcry_err_code_t _gcry_cipher_ccm_set_nonce
 /*           */ (gcry_cipher_hd_t c, const unsigned char *nonce,
                  size_t noncelen);
@@ -216,6 +290,30 @@ gcry_err_code_t _gcry_cipher_ccm_check_tag
 /*           */ (gcry_cipher_hd_t c,
                  const unsigned char *intag, size_t taglen);
 
+
+/*-- cipher-gcm.c --*/
+gcry_err_code_t _gcry_cipher_gcm_encrypt
+/*           */   (gcry_cipher_hd_t c,
+                   unsigned char *outbuf, size_t outbuflen,
+                   const unsigned char *inbuf, size_t inbuflen);
+gcry_err_code_t _gcry_cipher_gcm_decrypt
+/*           */   (gcry_cipher_hd_t c,
+                   unsigned char *outbuf, size_t outbuflen,
+                   const unsigned char *inbuf, size_t inbuflen);
+gcry_err_code_t _gcry_cipher_gcm_setiv
+/*           */   (gcry_cipher_hd_t c,
+                   const unsigned char *iv, size_t ivlen);
+gcry_err_code_t _gcry_cipher_gcm_authenticate
+/*           */   (gcry_cipher_hd_t c,
+                   const unsigned char *aadbuf, size_t aadbuflen);
+gcry_err_code_t _gcry_cipher_gcm_get_tag
+/*           */   (gcry_cipher_hd_t c,
+                   unsigned char *outtag, size_t taglen);
+gcry_err_code_t _gcry_cipher_gcm_check_tag
+/*           */   (gcry_cipher_hd_t c,
+                   const unsigned char *intag, size_t taglen);
+void _gcry_cipher_gcm_setkey
+/*           */   (gcry_cipher_hd_t c);
 
 
 #endif /*G10_CIPHER_INTERNAL_H*/

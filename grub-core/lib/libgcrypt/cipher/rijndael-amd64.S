@@ -101,7 +101,7 @@
 #define do16bit_shr(shf, op, source, tablemul, table1, dest1, table2, dest2, t0, t1) \
 	movzbl source ## bl,			t0 ## d; \
 	movzbl source ## bh,			t1 ## d; \
-	shrq $(shf),				source; \
+	shrl $(shf),				source ## d; \
 	op ## l table1(RTAB,t0,tablemul),	dest1 ## d; \
 	op ## l table2(RTAB,t1,tablemul),	dest2 ## d;
 
@@ -355,7 +355,7 @@ _gcry_aes_amd64_decrypt_block:
 	decround(9);
 
 	jmp .Ldec_tail;
-.size _gcry_aes_amd64_encrypt_block,.-_gcry_aes_amd64_encrypt_block;
+.size _gcry_aes_amd64_decrypt_block,.-_gcry_aes_amd64_decrypt_block;
 
 .data
 .align 16

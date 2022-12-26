@@ -333,6 +333,36 @@ scanval (const char *string)
 }
 
 
+/* Return the index of the domain_parms table for a curve with NAME.
+   Return -1 if not found.  */
+static int
+find_domain_parms_idx (const char *name)
+{
+  int idx, aliasno;
+
+  /* First check our native curves.  */
+  for (idx = 0; domain_parms[idx].desc; idx++)
+    if (!strcmp (name, domain_parms[idx].desc))
+      return idx;
+
+  /* If not found consult the alias table.  */
+  if (!domain_parms[idx].desc)
+    {
+      for (aliasno = 0; curve_aliases[aliasno].name; aliasno++)
+        if (!strcmp (name, curve_aliases[aliasno].other))
+          break;
+      if (curve_aliases[aliasno].name)
+        {
+          for (idx = 0; domain_parms[idx].desc; idx++)
+            if (!strcmp (curve_aliases[aliasno].name, domain_parms[idx].desc))
+              return idx;
+        }
+    }
+
+  return -1;
+}
+
+
 /* Generate the crypto system setup.  This function takes the NAME of
    a curve or the desired number of bits and stores at R_CURVE the
    parameters of the named curve or those of a suitable curve.  If
@@ -345,45 +375,24 @@ gpg_err_code_t
 _gcry_ecc_fill_in_curve (unsigned int nbits, const char *name,
                          elliptic_curve_t *curve, unsigned int *r_nbits)
 {
-  int idx, aliasno;
+  int idx;
   const char *resname = NULL; /* Set to a found curve name.  */
 
   if (name)
-    {
-      /* First check our native curves.  */
-      for (idx = 0; domain_parms[idx].desc; idx++)
-        if (!strcmp (name, domain_parms[idx].desc))
-          {
-            resname = domain_parms[idx].desc;
-            break;
-          }
-      /* If not found consult the alias table.  */
-      if (!domain_parms[idx].desc)
-        {
-          for (aliasno = 0; curve_aliases[aliasno].name; aliasno++)
-            if (!strcmp (name, curve_aliases[aliasno].other))
-              break;
-          if (curve_aliases[aliasno].name)
-            {
-              for (idx = 0; domain_parms[idx].desc; idx++)
-                if (!strcmp (curve_aliases[aliasno].name,
-                             domain_parms[idx].desc))
-                  {
-                    resname = domain_parms[idx].desc;
-                    break;
-                  }
-            }
-        }
-    }
+    idx = find_domain_parms_idx (name);
   else
     {
       for (idx = 0; domain_parms[idx].desc; idx++)
         if (nbits == domain_parms[idx].nbits
             && domain_parms[idx].model == MPI_EC_WEIERSTRASS)
           break;
+      if (!domain_parms[idx].desc)
+        idx = -1;
     }
-  if (!domain_parms[idx].desc)
+  if (idx < 0)
     return GPG_ERR_UNKNOWN_CURVE;
+
+  resname = domain_parms[idx].desc;
 
   /* In fips mode we only support NIST curves.  Note that it is
      possible to bypass this check by specifying the curve parameters
@@ -432,11 +441,62 @@ _gcry_ecc_fill_in_curve (unsigned int nbits, const char *name,
 }
 
 
+/* Give the name of the curve NAME, store the curve parameters into P,
+   A, B, G, and N if they pint to NULL value.  Note that G is returned
+   in standard uncompressed format.  Also update MODEL and DIALECT if
+   they are not NULL. */
+gpg_err_code_t
+_gcry_ecc_update_curve_param (const char *name,
+                              enum gcry_mpi_ec_models *model,
+                              enum ecc_dialects *dialect,
+                              gcry_mpi_t *p, gcry_mpi_t *a, gcry_mpi_t *b,
+                              gcry_mpi_t *g, gcry_mpi_t *n)
+{
+  int idx;
+
+  idx = find_domain_parms_idx (name);
+  if (idx < 0)
+    return GPG_ERR_UNKNOWN_CURVE;
+
+  if (g)
+    {
+      char *buf;
+      size_t len;
+
+      len = 4;
+      len += strlen (domain_parms[idx].g_x+2);
+      len += strlen (domain_parms[idx].g_y+2);
+      len++;
+      buf = gcry_malloc (len);
+      if (!buf)
+        return gpg_err_code_from_syserror ();
+      strcpy (stpcpy (stpcpy (buf, "0x04"), domain_parms[idx].g_x+2),
+              domain_parms[idx].g_y+2);
+      *g = scanval (buf);
+      gcry_free (buf);
+    }
+  if (model)
+    *model = domain_parms[idx].model;
+  if (dialect)
+    *dialect = domain_parms[idx].dialect;
+  if (p)
+    *p = scanval (domain_parms[idx].p);
+  if (a)
+    *a = scanval (domain_parms[idx].a);
+  if (b)
+    *b = scanval (domain_parms[idx].b);
+  if (n)
+    *n = scanval (domain_parms[idx].n);
+  return 0;
+}
+
+
 /* Return the name matching the parameters in PKEY.  This works only
    with curves described by the Weierstrass equation. */
 const char *
 _gcry_ecc_get_curve (gcry_sexp_t keyparms, int iterator, unsigned int *r_nbits)
 {
+  gpg_err_code_t rc;
   const char *result = NULL;
   elliptic_curve_t E;
   gcry_mpi_t mpi_g = NULL;
@@ -464,10 +524,39 @@ _gcry_ecc_get_curve (gcry_sexp_t keyparms, int iterator, unsigned int *r_nbits)
   /*
    * Extract the curve parameters..
    */
-  if (_gcry_sexp_extract_param (keyparms, NULL, "-pabgn",
-                                &E.p, &E.a, &E.b, &mpi_g, &E.n,
-                                NULL))
+  rc = gpg_err_code (_gcry_sexp_extract_param (keyparms, NULL, "-pabgn",
+                                               &E.p, &E.a, &E.b, &mpi_g, &E.n,
+                                               NULL));
+  if (rc == GPG_ERR_NO_OBJ)
+    {
+      /* This might be the second use case of checking whether a
+         specific curve given by name is supported.  */
+      gcry_sexp_t l1;
+      char *name;
+
+      l1 = gcry_sexp_find_token (keyparms, "curve", 5);
+      if (!l1)
+        goto leave;  /* No curve name parameter.  */
+
+      name = _gcry_sexp_nth_string (l1, 1);
+      gcry_sexp_release (l1);
+      if (!name)
+        goto leave;  /* Name missing or out of core. */
+
+      idx = find_domain_parms_idx (name);
+      gcry_free (name);
+      if (idx >= 0)  /* Curve found.  */
+        {
+          result = domain_parms[idx].desc;
+          if (r_nbits)
+            *r_nbits = domain_parms[idx].nbits;
+        }
+      return result;
+    }
+
+  if (rc)
     goto leave;
+
   if (mpi_g)
     {
       _gcry_mpi_point_init (&E.G);
@@ -545,28 +634,36 @@ mpi_from_keyparam (gcry_mpi_t *r_a, gcry_sexp_t keyparam, const char *name)
 /* Helper to extract a point from key parameters.  If no parameter
    with NAME is found, the functions tries to find a non-encoded point
    by appending ".x", ".y" and ".z" to NAME.  ".z" is in this case
-   optional and defaults to 1.  */
+   optional and defaults to 1.  EC is the context which at this point
+   may not be fully initialized. */
 static gpg_err_code_t
 point_from_keyparam (gcry_mpi_point_t *r_a,
-                     gcry_sexp_t keyparam, const char *name)
+                     gcry_sexp_t keyparam, const char *name, mpi_ec_t ec)
 {
-  gcry_err_code_t ec;
-  gcry_mpi_t a = NULL;
+  gcry_err_code_t rc;
+  gcry_sexp_t l1;
   gcry_mpi_point_t point;
 
-  ec = mpi_from_keyparam (&a, keyparam, name);
-  if (ec)
-    return ec;
-
-  if (a)
+  l1 = gcry_sexp_find_token (keyparam, name, 0);
+  if (l1)
     {
+      gcry_mpi_t a;
+
+      a = gcry_sexp_nth_mpi (l1, 1, GCRYMPI_FMT_OPAQUE);
+      gcry_sexp_release (l1);
+      if (!a)
+        return GPG_ERR_INV_OBJ;
+
       point = gcry_mpi_point_new (0);
-      ec = _gcry_ecc_os2ec (point, a);
+      if (ec && ec->dialect == ECC_DIALECT_ED25519)
+        rc = _gcry_ecc_eddsa_decodepoint (a, ec, point, NULL, NULL);
+      else
+        rc = _gcry_ecc_os2ec (point, a);
       mpi_free (a);
-      if (ec)
+      if (rc)
         {
           gcry_mpi_point_release (point);
-          return ec;
+          return rc;
         }
     }
   else
@@ -580,28 +677,28 @@ point_from_keyparam (gcry_mpi_point_t *r_a,
       if (!tmpname)
         return gpg_err_code_from_syserror ();
       strcpy (stpcpy (tmpname, name), ".x");
-      ec = mpi_from_keyparam (&x, keyparam, tmpname);
-      if (ec)
+      rc = mpi_from_keyparam (&x, keyparam, tmpname);
+      if (rc)
         {
           gcry_free (tmpname);
-          return ec;
+          return rc;
         }
       strcpy (stpcpy (tmpname, name), ".y");
-      ec = mpi_from_keyparam (&y, keyparam, tmpname);
-      if (ec)
+      rc = mpi_from_keyparam (&y, keyparam, tmpname);
+      if (rc)
         {
           mpi_free (x);
           gcry_free (tmpname);
-          return ec;
+          return rc;
         }
       strcpy (stpcpy (tmpname, name), ".z");
-      ec = mpi_from_keyparam (&z, keyparam, tmpname);
-      if (ec)
+      rc = mpi_from_keyparam (&z, keyparam, tmpname);
+      if (rc)
         {
           mpi_free (y);
           mpi_free (x);
           gcry_free (tmpname);
-          return ec;
+          return rc;
         }
       if (!z)
         z = mpi_set_ui (NULL, 1);
@@ -645,44 +742,55 @@ _gcry_mpi_ec_new (gcry_ctx_t *r_ctx,
   gcry_mpi_t n = NULL;
   gcry_mpi_point_t Q = NULL;
   gcry_mpi_t d = NULL;
+  int flags = 0;
   gcry_sexp_t l1;
 
   *r_ctx = NULL;
 
   if (keyparam)
     {
-      errc = mpi_from_keyparam (&p, keyparam, "p");
-      if (errc)
-        goto leave;
-      errc = mpi_from_keyparam (&a, keyparam, "a");
-      if (errc)
-        goto leave;
-      errc = mpi_from_keyparam (&b, keyparam, "b");
-      if (errc)
-        goto leave;
-      errc = point_from_keyparam (&G, keyparam, "g");
-      if (errc)
-        goto leave;
-      errc = mpi_from_keyparam (&n, keyparam, "n");
-      if (errc)
-        goto leave;
-      errc = point_from_keyparam (&Q, keyparam, "q");
-      if (errc)
-        goto leave;
-      errc = mpi_from_keyparam (&d, keyparam, "d");
-      if (errc)
-        goto leave;
-    }
+      /* Parse an optional flags list.  */
+      l1 = gcry_sexp_find_token (keyparam, "flags", 0);
+      if (l1)
+        {
+          errc = _gcry_pk_util_parse_flaglist (l1, &flags, NULL);
+          gcry_sexp_release (l1);
+          l1 = NULL;
+          if (errc)
+            goto leave;
+        }
 
+      /* Check whether a curve name was given.  */
+      l1 = gcry_sexp_find_token (keyparam, "curve", 5);
+
+      /* If we don't have a curve name or if override parameters have
+         explicitly been requested, parse them.  */
+      if (!l1 || (flags & PUBKEY_FLAG_PARAM))
+        {
+          errc = mpi_from_keyparam (&p, keyparam, "p");
+          if (errc)
+            goto leave;
+          errc = mpi_from_keyparam (&a, keyparam, "a");
+          if (errc)
+            goto leave;
+          errc = mpi_from_keyparam (&b, keyparam, "b");
+          if (errc)
+            goto leave;
+          errc = point_from_keyparam (&G, keyparam, "g", NULL);
+          if (errc)
+            goto leave;
+          errc = mpi_from_keyparam (&n, keyparam, "n");
+          if (errc)
+            goto leave;
+        }
+    }
+  else
+    l1 = NULL; /* No curvename.  */
 
   /* Check whether a curve parameter is available and use that to fill
      in missing values.  If no curve parameter is available try an
      optional provided curvename.  If only the curvename has been
      given use that one. */
-  if (keyparam)
-    l1 = gcry_sexp_find_token (keyparam, "curve", 5);
-  else
-    l1 = NULL;
   if (l1 || curvename)
     {
       char *name;
@@ -751,13 +859,15 @@ _gcry_mpi_ec_new (gcry_ctx_t *r_ctx,
       gcry_free (E);
     }
 
-  errc = _gcry_mpi_ec_p_new (&ctx, model, dialect, p, a, b);
+
+  errc = _gcry_mpi_ec_p_new (&ctx, model, dialect, flags, p, a, b);
   if (!errc)
     {
       mpi_ec_t ec = _gcry_ctx_get_pointer (ctx, CONTEXT_TYPE_EC);
 
       if (b)
         {
+          mpi_free (ec->b);
           ec->b = b;
           b = NULL;
         }
@@ -771,6 +881,22 @@ _gcry_mpi_ec_new (gcry_ctx_t *r_ctx,
           ec->n = n;
           n = NULL;
         }
+
+      /* Now that we know the curve name we can look for the public key
+         Q.  point_from_keyparam needs to know the curve parameters so
+         that it is able to use the correct decompression.  Parsing
+         the private key D could have been done earlier but it is less
+         surprising if we do it here as well.  */
+      if (keyparam)
+        {
+          errc = point_from_keyparam (&Q, keyparam, "q", ec);
+          if (errc)
+            goto leave;
+          errc = mpi_from_keyparam (&d, keyparam, "d");
+          if (errc)
+            goto leave;
+        }
+
       if (Q)
         {
           ec->Q = Q;
@@ -783,9 +909,11 @@ _gcry_mpi_ec_new (gcry_ctx_t *r_ctx,
         }
 
       *r_ctx = ctx;
+      ctx = NULL;
     }
 
  leave:
+  gcry_ctx_release (ctx);
   mpi_free (p);
   mpi_free (a);
   mpi_free (b);
@@ -814,7 +942,10 @@ _gcry_ecc_get_param (const char *name, gcry_mpi_t *pkey)
 
   g_x = mpi_new (0);
   g_y = mpi_new (0);
-  ctx = _gcry_mpi_ec_p_internal_new (0, ECC_DIALECT_STANDARD, E.p, E.a, NULL);
+  ctx = _gcry_mpi_ec_p_internal_new (MPI_EC_WEIERSTRASS,
+                                     ECC_DIALECT_STANDARD,
+                                     0,
+                                     E.p, E.a, NULL);
   if (_gcry_mpi_ec_get_affine (g_x, g_y, &E.G, ctx))
     log_fatal ("ecc get param: Failed to get affine coordinates\n");
   _gcry_mpi_ec_free (ctx);

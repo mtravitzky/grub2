@@ -164,6 +164,7 @@ int _gcry_log_verbosity( int level );
 #define HWF_PADLOCK_SHA  4
 #define HWF_PADLOCK_MMUL 8
 
+#define HWF_INTEL_PCLMUL 128
 #define HWF_INTEL_AESNI  256
 #define HWF_INTEL_RDRAND 512
 #define HWF_INTEL_AVX    1024
@@ -322,7 +323,6 @@ void __gcry_burn_stack (unsigned int bytes);
 /*-- sexp.c --*/
 gcry_err_code_t _gcry_sexp_vbuild (gcry_sexp_t *retsexp, size_t *erroff,
                                    const char *format, va_list arg_ptr);
-gcry_mpi_t _gcry_sexp_nth_opaque_mpi (gcry_sexp_t list, int number);
 char *_gcry_sexp_nth_string (const gcry_sexp_t list, int number);
 gpg_err_code_t _gcry_sexp_vextract_param (gcry_sexp_t sexp, const char *path,
                                           const char *list, va_list arg_ptr);
