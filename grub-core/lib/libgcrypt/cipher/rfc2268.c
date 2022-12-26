@@ -351,8 +351,25 @@ static gcry_cipher_oid_spec_t oids_rfc2268_40[] =
     { NULL }
   };
 
-gcry_cipher_spec_t _gcry_cipher_spec_rfc2268_40 = {
-  "RFC2268_40", NULL, oids_rfc2268_40,
-  RFC2268_BLOCKSIZE, 40, sizeof(RFC2268_context),
-  do_setkey, encrypt_block, decrypt_block
-};
+static gcry_cipher_oid_spec_t oids_rfc2268_128[] =
+  {
+    /* pbeWithSHAAnd128BitRC2_CBC */
+    { "1.2.840.113549.1.12.1.5", GCRY_CIPHER_MODE_CBC },
+    { NULL }
+  };
+
+gcry_cipher_spec_t _gcry_cipher_spec_rfc2268_40 =
+  {
+    GCRY_CIPHER_RFC2268_40, {0, 0},
+    "RFC2268_40", NULL, oids_rfc2268_40,
+    RFC2268_BLOCKSIZE, 40, sizeof(RFC2268_context),
+    do_setkey, encrypt_block, decrypt_block
+  };
+
+gcry_cipher_spec_t _gcry_cipher_spec_rfc2268_128 =
+  {
+    GCRY_CIPHER_RFC2268_128, {0, 0},
+    "RFC2268_128", NULL, oids_rfc2268_128,
+    RFC2268_BLOCKSIZE, 128, sizeof(RFC2268_context),
+    do_setkey, encrypt_block, decrypt_block
+  };

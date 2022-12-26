@@ -66,7 +66,6 @@
 #define GCC_ATTR_FORMAT_ARG(a)
 #endif
 
-
 /* I am not sure since when the unused attribute is really supported.
    In any case it it only needed for gcc versions which print a
    warning.  Thus let us require gcc >= 3.5.  */
@@ -75,7 +74,6 @@
 #else
 #define GCC_ATTR_UNUSED
 #endif
-
 
 /* Gettext macros.  */
 
@@ -249,7 +247,16 @@ int strcasecmp (const char *a, const char *b) _GCRY_GCC_ATTR_PURE;
 
 /* Stack burning.  */
 
-void _gcry_burn_stack (unsigned int bytes);
+#ifdef HAVE_GCC_ASM_VOLATILE_MEMORY
+#define  __gcry_burn_stack_dummy() asm volatile ("":::"memory")
+#else
+void __gcry_burn_stack_dummy (void);
+#endif
+
+void __gcry_burn_stack (unsigned int bytes);
+#define _gcry_burn_stack(bytes) \
+	do { __gcry_burn_stack (bytes); \
+	     __gcry_burn_stack_dummy (); } while(0)
 
 
 /* To avoid that a compiler optimizes certain memset calls away, these
@@ -352,6 +359,12 @@ gcry_err_code_t _gcry_sexp_vbuild (gcry_sexp_t *retsexp, size_t *erroff,
                                    const char *format, va_list arg_ptr);
 gcry_mpi_t _gcry_sexp_nth_opaque_mpi (gcry_sexp_t list, int number);
 char *_gcry_sexp_nth_string (const gcry_sexp_t list, int number);
+gpg_err_code_t _gcry_sexp_vextract_param (gcry_sexp_t sexp, const char *path,
+                                          const char *list, va_list arg_ptr);
+gpg_err_code_t _gcry_sexp_extract_param (gcry_sexp_t sexp,
+                                         const char *path,
+                                         const char *list,
+                                         ...) _GCRY_GCC_ATTR_SENTINEL(0);
 
 
 /*-- fips.c --*/

@@ -28,9 +28,16 @@
 
 #define PUBKEY_FLAG_NO_BLINDING    (1 << 0)
 #define PUBKEY_FLAG_RFC6979        (1 << 1)
-#define PUBKEY_FLAG_EDDSA          (1 << 2)
-#define PUBKEY_FLAG_FIXEDLEN       (1 << 3)
-#define PUBKEY_FLAG_LEGACYRESULT   (1 << 4)
+#define PUBKEY_FLAG_FIXEDLEN       (1 << 2)
+#define PUBKEY_FLAG_LEGACYRESULT   (1 << 3)
+#define PUBKEY_FLAG_RAW_FLAG       (1 << 4)
+#define PUBKEY_FLAG_TRANSIENT_KEY  (1 << 5)
+#define PUBKEY_FLAG_USE_X931       (1 << 6)
+#define PUBKEY_FLAG_USE_FIPS186    (1 << 7)
+#define PUBKEY_FLAG_USE_FIPS186_2  (1 << 8)
+#define PUBKEY_FLAG_ECDSA          (1 << 9)
+#define PUBKEY_FLAG_EDDSA          (1 << 10)
+
 
 enum pk_operation
   {
@@ -194,6 +201,7 @@ extern gcry_cipher_spec_t _gcry_cipher_spec_serpent128;
 extern gcry_cipher_spec_t _gcry_cipher_spec_serpent192;
 extern gcry_cipher_spec_t _gcry_cipher_spec_serpent256;
 extern gcry_cipher_spec_t _gcry_cipher_spec_rfc2268_40;
+extern gcry_cipher_spec_t _gcry_cipher_spec_rfc2268_128;
 extern gcry_cipher_spec_t _gcry_cipher_spec_seed;
 extern gcry_cipher_spec_t _gcry_cipher_spec_camellia128;
 extern gcry_cipher_spec_t _gcry_cipher_spec_camellia192;
@@ -202,12 +210,6 @@ extern gcry_cipher_spec_t _gcry_cipher_spec_idea;
 extern gcry_cipher_spec_t _gcry_cipher_spec_salsa20;
 extern gcry_cipher_spec_t _gcry_cipher_spec_salsa20r12;
 extern gcry_cipher_spec_t _gcry_cipher_spec_gost28147;
-
-extern cipher_extra_spec_t _gcry_cipher_extraspec_tripledes;
-extern cipher_extra_spec_t _gcry_cipher_extraspec_aes;
-extern cipher_extra_spec_t _gcry_cipher_extraspec_aes192;
-extern cipher_extra_spec_t _gcry_cipher_extraspec_aes256;
-extern cipher_extra_spec_t _gcry_cipher_extraspec_salsa20;
 
 /* Declarations for the digest specifications.  */
 extern gcry_md_spec_t _gcry_digest_spec_crc32;
@@ -228,12 +230,6 @@ extern gcry_md_spec_t _gcry_digest_spec_tiger;
 extern gcry_md_spec_t _gcry_digest_spec_tiger1;
 extern gcry_md_spec_t _gcry_digest_spec_tiger2;
 extern gcry_md_spec_t _gcry_digest_spec_whirlpool;
-
-extern md_extra_spec_t _gcry_digest_extraspec_sha1;
-extern md_extra_spec_t _gcry_digest_extraspec_sha224;
-extern md_extra_spec_t _gcry_digest_extraspec_sha256;
-extern md_extra_spec_t _gcry_digest_extraspec_sha384;
-extern md_extra_spec_t _gcry_digest_extraspec_sha512;
 
 /* Declarations for the pubkey cipher specifications.  */
 extern gcry_pk_spec_t _gcry_pubkey_spec_rsa;

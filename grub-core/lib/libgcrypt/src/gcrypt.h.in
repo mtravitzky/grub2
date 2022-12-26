@@ -102,6 +102,10 @@ extern "C" {
 
 #define _GCRY_GCC_ATTR_PRINTF(f,a)  __attribute__ ((format (printf,f,a)))
 
+#if _GCRT_GCC_VERSION >= 40000
+#define _GCRY_GCC_ATTR_SENTINEL(a) __attribute__ ((sentinel(a)))
+#endif
+
 #endif /*__GNUC__*/
 
 #ifndef _GCRY_GCC_ATTR_DEPRECATED
@@ -114,7 +118,10 @@ extern "C" {
 #define _GCRY_GCC_ATTR_MALLOC
 #endif
 #ifndef _GCRY_GCC_ATTR_PRINTF
-#define _GCRY_GCC_ATTR_PRINTF
+#define _GCRY_GCC_ATTR_PRINTF(f,a)
+#endif
+#ifndef _GCRY_GCC_ATTR_SENTINEL
+#define _GCRY_GCC_ATTR_SENTINEL(a)
 #endif
 
 /* Make up an attribute to mark functions and types as deprecated but
@@ -222,8 +229,7 @@ const char *gcry_check_version (const char *req_version);
 /* Codes used with the gcry_control function. */
 enum gcry_ctl_cmds
   {
-    GCRYCTL_SET_KEY  = 1,
-    GCRYCTL_SET_IV   = 2,
+    /* Note: 1 .. 2 are not anymore used. */
     GCRYCTL_CFB_SYNC = 3,
     GCRYCTL_RESET    = 4,   /* e.g. for MDs */
     GCRYCTL_FINALIZE = 5,
@@ -263,7 +269,7 @@ enum gcry_ctl_cmds
     GCRYCTL_ANY_INITIALIZATION_P = 40,
     GCRYCTL_SET_CBC_CTS = 41,
     GCRYCTL_SET_CBC_MAC = 42,
-    GCRYCTL_SET_CTR = 43,
+    /* Note: 43 is not anymore used. */
     GCRYCTL_ENABLE_QUICK_RANDOM = 44,
     GCRYCTL_SET_RANDOM_SEED_FILE = 45,
     GCRYCTL_UPDATE_RANDOM_SEED_FILE = 46,
@@ -425,6 +431,12 @@ char *gcry_sexp_nth_string (gcry_sexp_t list, int number);
    value can't be converted to an MPI, `NULL' is returned.  */
 gcry_mpi_t gcry_sexp_nth_mpi (gcry_sexp_t list, int number, int mpifmt);
 
+/* Convenience fucntion to extract parameters from an S-expression
+ * using a list of single letter parameters.  */
+gpg_error_t gcry_sexp_extract_param (gcry_sexp_t sexp,
+                                     const char *path,
+                                     const char *list,
+                                     ...) _GCRY_GCC_ATTR_SENTINEL(0);
 
 
 /*******************************************
@@ -940,16 +952,16 @@ size_t gcry_cipher_get_algo_blklen (int algo);
  *                                  *
  ************************************/
 
-/* The algorithms and their IDs we support. */
+/* The algorithms and their IDs we support.  */
 enum gcry_pk_algos
   {
-    GCRY_PK_RSA   = 1,
-    GCRY_PK_RSA_E = 2,      /* (deprecated) */
-    GCRY_PK_RSA_S = 3,      /* (deprecated) */
-    GCRY_PK_ELG_E = 16,
-    GCRY_PK_DSA   = 17,
+    GCRY_PK_RSA   = 1,      /* RSA */
+    GCRY_PK_RSA_E = 2,      /* (deprecated: use 1).  */
+    GCRY_PK_RSA_S = 3,      /* (deprecated: use 1).  */
+    GCRY_PK_ELG_E = 16,     /* (deprecated: use 20). */
+    GCRY_PK_DSA   = 17,     /* Digital Signature Algorithm.  */
     GCRY_PK_ECC   = 18,     /* Generic ECC.  */
-    GCRY_PK_ELG   = 20,
+    GCRY_PK_ELG   = 20,     /* Elgamal       */
     GCRY_PK_ECDSA = 301,    /* (deprecated: use 18).  */
     GCRY_PK_ECDH  = 302     /* (deprecated: use 18).  */
   };

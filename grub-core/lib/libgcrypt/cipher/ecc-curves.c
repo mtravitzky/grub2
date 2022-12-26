@@ -26,8 +26,10 @@
 
 #include "g10lib.h"
 #include "mpi.h"
+#include "cipher.h"
 #include "context.h"
 #include "ec-context.h"
+#include "pubkey-internal.h"
 #include "ecc-common.h"
 
 
@@ -38,6 +40,8 @@ static const struct
   const char *other; /* Other name. */
 } curve_aliases[] =
   {
+    { "Ed25519",    "1.3.6.1.4.1.3029.1.5.1" },
+
     { "NIST P-192", "1.2.840.10045.3.1.1" }, /* X9.62 OID  */
     { "NIST P-192", "prime192v1" },          /* X9.62 name.  */
     { "NIST P-192", "secp192r1"  },          /* SECP name.  */
@@ -103,7 +107,7 @@ static const ecc_domain_parms_t domain_parms[] =
       MPI_EC_TWISTEDEDWARDS, ECC_DIALECT_ED25519,
       "0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFED",
       "-0x01",
-      "-0x98412DFC9311D490018C7338BF8688861767FF8FF5B2BEBE27548A14B235EC8FEDA4",
+      "-0x2DFC9311D490018C7338BF8688861767FF8FF5B2BEBE27548A14B235ECA6874A",
       "0x1000000000000000000000000000000014DEF9DEA2F79CD65812631A5CF5D3ED",
       "0x216936D3CD6E53FEC0A4E231FDD6DC5C692CC7609525A7B2C9562D608F25D51A",
       "0x6666666666666666666666666666666666666666666666666666666666666658"
@@ -304,7 +308,11 @@ scanval (const char *string)
 /* Generate the crypto system setup.  This function takes the NAME of
    a curve or the desired number of bits and stores at R_CURVE the
    parameters of the named curve or those of a suitable curve.  If
-   R_NBITS is not NULL, the chosen number of bits is stored there.  */
+   R_NBITS is not NULL, the chosen number of bits is stored there.
+   NULL may be given for R_CURVE, if the value is not required and for
+   example only a quick test for availability is desired.  Note that
+   the curve fields should be initialized to zero because fields which
+   are not NULL are skipped.  */
 gpg_err_code_t
 _gcry_ecc_fill_in_curve (unsigned int nbits, const char *name,
                          elliptic_curve_t *curve, unsigned int *r_nbits)
@@ -370,16 +378,27 @@ _gcry_ecc_fill_in_curve (unsigned int nbits, const char *name,
   if (r_nbits)
     *r_nbits = domain_parms[idx].nbits;
 
-  curve->model = domain_parms[idx].model;
-  curve->dialect = domain_parms[idx].dialect;
-  curve->p = scanval (domain_parms[idx].p);
-  curve->a = scanval (domain_parms[idx].a);
-  curve->b = scanval (domain_parms[idx].b);
-  curve->n = scanval (domain_parms[idx].n);
-  curve->G.x = scanval (domain_parms[idx].g_x);
-  curve->G.y = scanval (domain_parms[idx].g_y);
-  curve->G.z = mpi_alloc_set_ui (1);
-  curve->name = resname;
+  if (curve)
+    {
+      curve->model = domain_parms[idx].model;
+      curve->dialect = domain_parms[idx].dialect;
+      if (!curve->p)
+        curve->p = scanval (domain_parms[idx].p);
+      if (!curve->a)
+        curve->a = scanval (domain_parms[idx].a);
+      if (!curve->b)
+        curve->b = scanval (domain_parms[idx].b);
+      if (!curve->n)
+        curve->n = scanval (domain_parms[idx].n);
+      if (!curve->G.x)
+        curve->G.x = scanval (domain_parms[idx].g_x);
+      if (!curve->G.y)
+        curve->G.y = scanval (domain_parms[idx].g_y);
+      if (!curve->G.z)
+        curve->G.z = mpi_alloc_set_ui (1);
+      if (!curve->name)
+        curve->name = resname;
+    }
 
   return 0;
 }
@@ -388,18 +407,20 @@ _gcry_ecc_fill_in_curve (unsigned int nbits, const char *name,
 /* Return the name matching the parameters in PKEY.  This works only
    with curves described by the Weierstrass equation. */
 const char *
-_gcry_ecc_get_curve (gcry_mpi_t *pkey, int iterator, unsigned int *r_nbits)
+_gcry_ecc_get_curve (gcry_sexp_t keyparms, int iterator, unsigned int *r_nbits)
 {
-  gpg_err_code_t err;
-  elliptic_curve_t E;
-  int idx;
-  gcry_mpi_t tmp;
   const char *result = NULL;
+  elliptic_curve_t E;
+  gcry_mpi_t mpi_g = NULL;
+  gcry_mpi_t tmp = NULL;
+  int idx;
+
+  memset (&E, 0, sizeof E);
 
   if (r_nbits)
     *r_nbits = 0;
 
-  if (!pkey)
+  if (!keyparms)
     {
       idx = iterator;
       if (idx >= 0 && idx < DIM (domain_parms))
@@ -411,23 +432,20 @@ _gcry_ecc_get_curve (gcry_mpi_t *pkey, int iterator, unsigned int *r_nbits)
       return result;
     }
 
-  if (!pkey[0] || !pkey[1] || !pkey[2] || !pkey[3] || !pkey[4])
-    return NULL;
 
-  E.model = MPI_EC_WEIERSTRASS;
-  E.dialect = ECC_DIALECT_STANDARD;
-  E.name = NULL;
-  E.p = pkey[0];
-  E.a = pkey[1];
-  E.b = pkey[2];
-  _gcry_mpi_point_init (&E.G);
-  err = _gcry_ecc_os2ec (&E.G, pkey[3]);
-  if (err)
+  /*
+   * Extract the curve parameters..
+   */
+  if (_gcry_sexp_extract_param (keyparms, NULL, "-pabgn",
+                                &E.p, &E.a, &E.b, &mpi_g, &E.n,
+                                NULL))
+    goto leave;
+  if (mpi_g)
     {
-      _gcry_mpi_point_free_parts (&E.G);
-      return NULL;
+      _gcry_mpi_point_init (&E.G);
+      if (_gcry_ecc_os2ec (&E.G, mpi_g))
+        goto leave;
     }
-  E.n = pkey[4];
 
   for (idx = 0; domain_parms[idx].desc; idx++)
     {
@@ -454,22 +472,26 @@ _gcry_ecc_get_curve (gcry_mpi_t *pkey, int iterator, unsigned int *r_nbits)
                           tmp = scanval (domain_parms[idx].g_y);
                           if (!mpi_cmp (tmp, E.G.y))
                             {
-                              mpi_free (tmp);
                               result = domain_parms[idx].desc;
                               if (r_nbits)
                                 *r_nbits = domain_parms[idx].nbits;
-                              break;
+                              goto leave;
                             }
                         }
                     }
                 }
             }
         }
-      mpi_free (tmp);
     }
 
+ leave:
+  gcry_mpi_release (tmp);
+  gcry_mpi_release (E.p);
+  gcry_mpi_release (E.a);
+  gcry_mpi_release (E.b);
+  gcry_mpi_release (mpi_g);
   _gcry_mpi_point_free_parts (&E.G);
-
+  gcry_mpi_release (E.n);
   return result;
 }
 
@@ -757,6 +779,7 @@ _gcry_ecc_get_param (const char *name, gcry_mpi_t *pkey)
   mpi_ec_t ctx;
   gcry_mpi_t g_x, g_y;
 
+  memset (&E, 0, sizeof E);
   err = _gcry_ecc_fill_in_curve (0, name, &E, &nbits);
   if (err)
     return err;
