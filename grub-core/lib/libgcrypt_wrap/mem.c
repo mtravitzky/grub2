@@ -8,32 +8,32 @@
 GRUB_MOD_LICENSE ("GPLv3+");
 
 void *
-gcry_malloc (size_t n)
+_gcry_malloc (size_t n)
 {
   return grub_malloc (n);
 }
 
 void *
-gcry_malloc_secure (size_t n)
+_gcry_malloc_secure (size_t n)
 {
   return grub_malloc (n);
 }
 
 void
-gcry_free (void *a)
+_gcry_free (void *a)
 {
   grub_free (a);
 }
 
 int
-gcry_is_secure (const void *a __attribute__ ((unused)))
+_gcry_is_secure (const void *a __attribute__ ((unused)))
 {
   return 0;
 }
 
 /* FIXME: implement "exit".  */
 void *
-gcry_xcalloc (size_t n, size_t m)
+_gcry_xcalloc (size_t n, size_t m)
 {
   void *ret;
   ret = grub_zalloc (n * m);
@@ -43,7 +43,7 @@ gcry_xcalloc (size_t n, size_t m)
 }
 
 void *
-gcry_xmalloc_secure (size_t n)
+_gcry_xmalloc_secure (size_t n)
 {
   void *ret;
   ret = grub_malloc (n);
@@ -53,7 +53,7 @@ gcry_xmalloc_secure (size_t n)
 }
 
 void *
-gcry_xcalloc_secure (size_t n, size_t m)
+_gcry_xcalloc_secure (size_t n, size_t m)
 {
   void *ret;
   ret = grub_zalloc (n * m);
@@ -63,7 +63,7 @@ gcry_xcalloc_secure (size_t n, size_t m)
 }
 
 void *
-gcry_xmalloc (size_t n)
+_gcry_xmalloc (size_t n)
 {
   void *ret;
   ret = grub_malloc (n);
@@ -73,7 +73,7 @@ gcry_xmalloc (size_t n)
 }
 
 void *
-gcry_xrealloc (void *a, size_t n)
+_gcry_xrealloc (void *a, size_t n)
 {
   void *ret;
   ret = grub_realloc (a, n);

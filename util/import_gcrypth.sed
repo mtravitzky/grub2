@@ -20,4 +20,5 @@
 /^typedef struct gcry_md_handle\s*$/,/^} \*gcry_md_hd_t;/ d
 s,_GCRT_GCC_VERSION,_GCRY_GCC_VERSION,g
 s,_gcry_mpi_invm,gcry_mpi_invm,g
+s,gcry_mpi_get_nbits,_gcry_mpi_get_nbits,g
 p

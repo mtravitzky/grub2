@@ -566,3 +566,6 @@ struct pk_encoding_ctx
 };
 
 #endif
+
+#define gcry_mpi_get_nbits _gcry_mpi_get_nbits
+#define gcry_mpi_scan _gcry_mpi_scan

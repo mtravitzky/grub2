@@ -523,12 +523,17 @@ for src in sorted (os.listdir (os.path.join (indir, "src"))):
         fw.close ()
         continue
     if src == "visibility.h":
-        fw.write ("# include <grub/gcrypt/gcrypt.h>\n")
+        fw.write ('# include "gcrypt-int.h"\n')
         fw.close ()
         continue
     f = codecs.open (infile, "r", "utf-8")
     if src == "types.h":
         fw.write (f.read ().replace ("float f;", "").replace ("double g;", ""))
+        f.close ()
+        fw.close ()
+        continue
+    if src == "gcrypt-int.h":
+        fw.write (f.read ().replace ("gcrypt.h", "grub/gcrypt/gcrypt.h"))
         f.close ()
         fw.close ()
         continue
@@ -561,7 +566,7 @@ for src in sorted (os.listdir (os.path.join (indir, "mpi"))):
             hold = False
             # We're optimising for size and exclude anything needing good
             # randomness.
-            if not re.match ("(_gcry_mpi_get_hw_config|gcry_mpi_randomize)", line) is None:
+            if not re.match ("(_gcry_mpi_get_hw_config|_gcry_mpi_randomize)", line) is None:
                 skip = 1
                 continue
             else:
