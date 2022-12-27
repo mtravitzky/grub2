@@ -46,8 +46,8 @@
  * RES = BASE ^ EXPO mod MOD
  */
 void
-gcry_mpi_powm (gcry_mpi_t res,
-               gcry_mpi_t base, gcry_mpi_t expo, gcry_mpi_t mod)
+_gcry_mpi_powm (gcry_mpi_t res,
+                gcry_mpi_t base, gcry_mpi_t expo, gcry_mpi_t mod)
 {
   /* Pointer to the limbs of the arguments, their size and signs. */
   mpi_ptr_t  rp, ep, mp, bp;
@@ -177,7 +177,7 @@ gcry_mpi_powm (gcry_mpi_t res,
     }
   MPN_COPY ( rp, bp, bsize );
   rsize = bsize;
-  rsign = bsign;
+  rsign = 0;
 
   /* Main processing.  */
   {
@@ -192,7 +192,7 @@ gcry_mpi_powm (gcry_mpi_t res,
     xp = xp_marker = mpi_alloc_limb_space( 2 * (msize + 1), msec );
 
     memset( &karactx, 0, sizeof karactx );
-    negative_result = (ep[0] & 1) && base->sign;
+    negative_result = (ep[0] & 1) && bsign;
 
     i = esize - 1;
     e = ep[i];
@@ -395,8 +395,8 @@ mul_mod (mpi_ptr_t xp, mpi_size_t *xsize_p,
  *       Algorithm 14.83: Modified left-to-right k-ary exponentiation
  */
 void
-gcry_mpi_powm (gcry_mpi_t res,
-               gcry_mpi_t base, gcry_mpi_t expo, gcry_mpi_t mod)
+_gcry_mpi_powm (gcry_mpi_t res,
+                gcry_mpi_t base, gcry_mpi_t expo, gcry_mpi_t mod)
 {
   /* Pointer to the limbs of the arguments, their size and signs. */
   mpi_ptr_t  rp, ep, mp, bp;

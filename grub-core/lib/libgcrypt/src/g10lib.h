@@ -93,6 +93,36 @@ gcry_error_t _gcry_vcontrol (enum gcry_ctl_cmds cmd, va_list arg_ptr);
 void  _gcry_check_heap (const void *a);
 int _gcry_get_debug_flag (unsigned int mask);
 
+/* Malloc functions and common wrapper macros.  */
+void *_gcry_malloc (size_t n) _GCRY_GCC_ATTR_MALLOC;
+void *_gcry_calloc (size_t n, size_t m) _GCRY_GCC_ATTR_MALLOC;
+void *_gcry_malloc_secure (size_t n) _GCRY_GCC_ATTR_MALLOC;
+void *_gcry_calloc_secure (size_t n, size_t m) _GCRY_GCC_ATTR_MALLOC;
+void *_gcry_realloc (void *a, size_t n);
+char *_gcry_strdup (const char *string) _GCRY_GCC_ATTR_MALLOC;
+void *_gcry_xmalloc (size_t n) _GCRY_GCC_ATTR_MALLOC;
+void *_gcry_xcalloc (size_t n, size_t m) _GCRY_GCC_ATTR_MALLOC;
+void *_gcry_xmalloc_secure (size_t n) _GCRY_GCC_ATTR_MALLOC;
+void *_gcry_xcalloc_secure (size_t n, size_t m) _GCRY_GCC_ATTR_MALLOC;
+void *_gcry_xrealloc (void *a, size_t n);
+char *_gcry_xstrdup (const char * a) _GCRY_GCC_ATTR_MALLOC;
+void  _gcry_free (void *a);
+int   _gcry_is_secure (const void *a) _GCRY_GCC_ATTR_PURE;
+
+#define xtrymalloc(a)    _gcry_malloc ((a))
+#define xtrycalloc(a,b)  _gcry_calloc ((a),(b))
+#define xtrymalloc_secure(a)   _gcry_malloc_secure ((a))
+#define xtrycalloc_secure(a,b) _gcry_calloc_secure ((a),(b))
+#define xtryrealloc(a,b) _gcry_realloc ((a),(b))
+#define xtrystrdup(a)    _gcry_strdup ((a))
+#define xmalloc(a)       _gcry_xmalloc ((a))
+#define xcalloc(a,b)     _gcry_xcalloc ((a),(b))
+#define xmalloc_secure(a)   _gcry_xmalloc_secure ((a))
+#define xcalloc_secure(a,b) _gcry_xcalloc_secure ((a),(b))
+#define xrealloc(a,b)    _gcry_xrealloc ((a),(b))
+#define xstrdup(a)       _gcry_xstrdup ((a))
+#define xfree(a)         _gcry_free ((a))
+
 
 /*-- src/misc.c --*/
 
@@ -173,8 +203,10 @@ int _gcry_log_verbosity( int level );
 #define HWF_ARM_NEON     4096
 
 
+gpg_err_code_t _gcry_disable_hw_feature (const char *name);
+void _gcry_detect_hw_features (void);
 unsigned int _gcry_get_hw_features (void);
-void _gcry_detect_hw_features (unsigned int);
+const char *_gcry_enum_hw_features (int idx, unsigned int *r_feature);
 
 
 /*-- mpi/mpiutil.c --*/
@@ -326,10 +358,6 @@ gcry_err_code_t _gcry_sexp_vbuild (gcry_sexp_t *retsexp, size_t *erroff,
 char *_gcry_sexp_nth_string (const gcry_sexp_t list, int number);
 gpg_err_code_t _gcry_sexp_vextract_param (gcry_sexp_t sexp, const char *path,
                                           const char *list, va_list arg_ptr);
-gpg_err_code_t _gcry_sexp_extract_param (gcry_sexp_t sexp,
-                                         const char *path,
-                                         const char *list,
-                                         ...) _GCRY_GCC_ATTR_SENTINEL(0);
 
 
 /*-- fips.c --*/

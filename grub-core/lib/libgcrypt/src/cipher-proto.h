@@ -84,10 +84,6 @@ typedef unsigned (*gcry_pk_get_nbits_t) (gcry_sexp_t keyparms);
 typedef gpg_err_code_t (*pk_comp_keygrip_t) (gcry_md_hd_t md,
                                              gcry_sexp_t keyparm);
 
-/* The type used to query ECC curve parameters.  */
-typedef gcry_err_code_t (*pk_get_param_t) (const char *name,
-                                           gcry_mpi_t *pkey);
-
 /* The type used to query an ECC curve name.  */
 typedef const char *(*pk_get_curve_t)(gcry_sexp_t keyparms, int iterator,
                                       unsigned int *r_nbits);
@@ -121,7 +117,6 @@ typedef struct gcry_pk_spec
   gcry_pk_get_nbits_t get_nbits;
   selftest_func_t selftest;
   pk_comp_keygrip_t comp_keygrip;
-  pk_get_param_t get_param;
   pk_get_curve_t get_curve;
   pk_get_curve_param_t get_curve_param;
 } gcry_pk_spec_t;
@@ -261,9 +256,6 @@ gcry_error_t _gcry_hmac_selftest (int algo, int extended,
 gcry_error_t _gcry_random_selftest (selftest_report_func_t report);
 
 
-/*-- pubkey.c --*/
-gcry_err_code_t _gcry_pubkey_get_sexp (gcry_sexp_t *r_sexp,
-                                       int reserved, gcry_ctx_t ctx);
 
 
 #endif /*G10_CIPHER_PROTO_H*/

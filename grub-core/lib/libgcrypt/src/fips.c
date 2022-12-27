@@ -36,7 +36,7 @@
 #include "hmac256.h"
 
 
-/* The name of the file used to foce libgcrypt into fips mode. */
+/* The name of the file used to force libgcrypt into fips mode. */
 #define FIPS_FORCE_FILE "/etc/gcrypt/fips_enabled"
 
 
@@ -660,7 +660,7 @@ check_binary_integrity (void)
             "integrity check using `%s' failed: %s",
             fname? fname:"[?]", gpg_strerror (err));
 #endif /*HAVE_SYSLOG*/
-  gcry_free (fname);
+  xfree (fname);
   return !!err;
 #else
   return 0;

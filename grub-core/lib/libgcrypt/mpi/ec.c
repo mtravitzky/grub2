@@ -53,8 +53,8 @@ _gcry_mpi_point_log (const char *name, mpi_point_t point, mpi_ec_t ctx)
 
   if (ctx)
     {
-      x = gcry_mpi_new (0);
-      y = gcry_mpi_new (0);
+      x = mpi_new (0);
+      y = mpi_new (0);
     }
   if (!ctx || _gcry_mpi_ec_get_affine (x, y, point, ctx))
     {
@@ -74,8 +74,8 @@ _gcry_mpi_point_log (const char *name, mpi_point_t point, mpi_ec_t ctx)
     }
   if (ctx)
     {
-      gcry_mpi_release (x);
-      gcry_mpi_release (y);
+      _gcry_mpi_release (x);
+      _gcry_mpi_release (y);
     }
 }
 
@@ -84,13 +84,13 @@ _gcry_mpi_point_log (const char *name, mpi_point_t point, mpi_ec_t ctx)
    coordinate; it is only used to pre-allocate some resources and
    might also be passed as 0 to use a default value.  */
 mpi_point_t
-gcry_mpi_point_new (unsigned int nbits)
+_gcry_mpi_point_new (unsigned int nbits)
 {
   mpi_point_t p;
 
   (void)nbits;  /* Currently not used.  */
 
-  p = gcry_xmalloc (sizeof *p);
+  p = xmalloc (sizeof *p);
   _gcry_mpi_point_init (p);
   return p;
 }
@@ -98,12 +98,12 @@ gcry_mpi_point_new (unsigned int nbits)
 
 /* Release the point object P.  P may be NULL. */
 void
-gcry_mpi_point_release (mpi_point_t p)
+_gcry_mpi_point_release (mpi_point_t p)
 {
   if (p)
     {
       _gcry_mpi_point_free_parts (p);
-      gcry_free (p);
+      xfree (p);
     }
 }
 
@@ -142,8 +142,8 @@ point_set (mpi_point_t d, mpi_point_t s)
 /* Set the projective coordinates from POINT into X, Y, and Z.  If a
    coordinate is not required, X, Y, or Z may be passed as NULL.  */
 void
-gcry_mpi_point_get (gcry_mpi_t x, gcry_mpi_t y, gcry_mpi_t z,
-                    mpi_point_t point)
+_gcry_mpi_point_get (gcry_mpi_t x, gcry_mpi_t y, gcry_mpi_t z,
+                     mpi_point_t point)
 {
   if (x)
     mpi_set (x, point->x);
@@ -158,13 +158,13 @@ gcry_mpi_point_get (gcry_mpi_t x, gcry_mpi_t y, gcry_mpi_t z,
    release POINT.  If a coordinate is not required, X, Y, or Z may be
    passed as NULL.  */
 void
-gcry_mpi_point_snatch_get (gcry_mpi_t x, gcry_mpi_t y, gcry_mpi_t z,
-                           mpi_point_t point)
+_gcry_mpi_point_snatch_get (gcry_mpi_t x, gcry_mpi_t y, gcry_mpi_t z,
+                            mpi_point_t point)
 {
   mpi_snatch (x, point->x);
   mpi_snatch (y, point->y);
   mpi_snatch (z, point->z);
-  gcry_free (point);
+  xfree (point);
 }
 
 
@@ -173,11 +173,11 @@ gcry_mpi_point_snatch_get (gcry_mpi_t x, gcry_mpi_t y, gcry_mpi_t z,
    POINT is given as NULL a new point object is allocated.  Returns
    POINT or the newly allocated point object. */
 mpi_point_t
-gcry_mpi_point_set (mpi_point_t point,
-                    gcry_mpi_t x, gcry_mpi_t y, gcry_mpi_t z)
+_gcry_mpi_point_set (mpi_point_t point,
+                     gcry_mpi_t x, gcry_mpi_t y, gcry_mpi_t z)
 {
   if (!point)
-    point = gcry_mpi_point_new (0);
+    point = mpi_point_new (0);
 
   if (x)
     mpi_set (point->x, x);
@@ -202,11 +202,11 @@ gcry_mpi_point_set (mpi_point_t point,
    coordinates X, Y, and Z are released.  Returns POINT or the newly
    allocated point object. */
 mpi_point_t
-gcry_mpi_point_snatch_set (mpi_point_t point,
-                           gcry_mpi_t x, gcry_mpi_t y, gcry_mpi_t z)
+_gcry_mpi_point_snatch_set (mpi_point_t point,
+                            gcry_mpi_t x, gcry_mpi_t y, gcry_mpi_t z)
 {
   if (!point)
-    point = gcry_mpi_point_new (0);
+    point = mpi_point_new (0);
 
   if (x)
     mpi_snatch (point->x, x);
@@ -240,7 +240,7 @@ ec_mod (gcry_mpi_t w, mpi_ec_t ec)
 static void
 ec_addm (gcry_mpi_t w, gcry_mpi_t u, gcry_mpi_t v, mpi_ec_t ctx)
 {
-  gcry_mpi_add (w, u, v);
+  mpi_add (w, u, v);
   ec_mod (w, ctx);
 }
 
@@ -248,7 +248,7 @@ static void
 ec_subm (gcry_mpi_t w, gcry_mpi_t u, gcry_mpi_t v, mpi_ec_t ec)
 {
   (void)ec;
-  gcry_mpi_sub (w, u, v);
+  mpi_sub (w, u, v);
   /*ec_mod (w, ec);*/
 }
 
@@ -285,6 +285,16 @@ ec_pow2 (gcry_mpi_t w, const gcry_mpi_t b, mpi_ec_t ctx)
   /* Using mpi_mul is slightly faster (at least on amd64).  */
   /* mpi_powm (w, b, mpi_const (MPI_C_TWO), ctx->p); */
   ec_mulm (w, b, b, ctx);
+}
+
+
+/* Shortcut for
+     ec_powm (B, B, mpi_const (MPI_C_THREE), ctx);
+   for easier optimization.  */
+static void
+ec_pow3 (gcry_mpi_t w, const gcry_mpi_t b, mpi_ec_t ctx)
+{
+  mpi_powm (w, b, mpi_const (MPI_C_THREE), ctx->p);
 }
 
 
@@ -375,8 +385,7 @@ ec_p_init (mpi_ec_t ctx, enum gcry_mpi_ec_models model,
     ctx->nbits = mpi_get_nbits (p);
   ctx->p = mpi_copy (p);
   ctx->a = mpi_copy (a);
-  if (b && model == MPI_EC_TWISTEDEDWARDS)
-    ctx->b = mpi_copy (b);
+  ctx->b = mpi_copy (b);
 
   ctx->t.p_barrett = use_barrett > 0? _gcry_mpi_barrett_init (ctx->p, 0):NULL;
 
@@ -418,11 +427,11 @@ ec_deinit (void *opaque)
   mpi_free (ctx->p);
   mpi_free (ctx->a);
   mpi_free (ctx->b);
-  gcry_mpi_point_release (ctx->G);
+  _gcry_mpi_point_release (ctx->G);
   mpi_free (ctx->n);
 
   /* The key.  */
-  gcry_mpi_point_release (ctx->Q);
+  _gcry_mpi_point_release (ctx->Q);
   mpi_free (ctx->d);
 
   /* Private data of ec.c.  */
@@ -461,7 +470,7 @@ _gcry_mpi_ec_p_internal_new (enum gcry_mpi_ec_models model,
 {
   mpi_ec_t ctx;
 
-  ctx = gcry_xcalloc (1, sizeof *ctx);
+  ctx = xcalloc (1, sizeof *ctx);
   ec_p_init (ctx, model, dialect, flags, p, a, b);
 
   return ctx;
@@ -469,7 +478,7 @@ _gcry_mpi_ec_p_internal_new (enum gcry_mpi_ec_models model,
 
 
 /* This is a variant of _gcry_mpi_ec_p_internal_new which returns an
-   public contect and does some error checking on the supplied
+   public context and does some error checking on the supplied
    arguments.  On success the new context is stored at R_CTX and 0 is
    returned; on error NULL is stored at R_CTX and an error code is
    returned.
@@ -506,7 +515,7 @@ _gcry_mpi_ec_free (mpi_ec_t ctx)
   if (ctx)
     {
       ec_deinit (ctx);
-      gcry_free (ctx);
+      xfree (ctx);
     }
 }
 
@@ -608,7 +617,7 @@ _gcry_mpi_ec_get_affine (gcry_mpi_t x, gcry_mpi_t y, mpi_point_t point,
         if (y)
           ec_mulm (y, point->y, z, ctx);
 
-        gcry_mpi_release (z);
+        _gcry_mpi_release (z);
       }
       return 0;
 
@@ -1108,11 +1117,30 @@ _gcry_mpi_ec_mul_point (mpi_point_t result,
       mpi_set_ui (result->y, 1);
       mpi_set_ui (result->z, 1);
 
-      for (j=nbits-1; j >= 0; j--)
+      if (mpi_is_secure (scalar))
         {
-          _gcry_mpi_ec_dup_point (result, result, ctx);
-          if (mpi_test_bit (scalar, j) == 1)
-            _gcry_mpi_ec_add_points (result, result, point, ctx);
+          /* If SCALAR is in secure memory we assume that it is the
+             secret key we use constant time operation.  */
+          mpi_point_struct tmppnt;
+
+          point_init (&tmppnt);
+          for (j=nbits-1; j >= 0; j--)
+            {
+              _gcry_mpi_ec_dup_point (result, result, ctx);
+              _gcry_mpi_ec_add_points (&tmppnt, result, point, ctx);
+              if (mpi_test_bit (scalar, j))
+                point_set (result, &tmppnt);
+            }
+          point_free (&tmppnt);
+        }
+      else
+        {
+          for (j=nbits-1; j >= 0; j--)
+            {
+              _gcry_mpi_ec_dup_point (result, result, ctx);
+              if (mpi_test_bit (scalar, j))
+                _gcry_mpi_ec_add_points (result, result, point, ctx);
+            }
         }
       return;
     }
@@ -1221,21 +1249,20 @@ _gcry_mpi_ec_curve_point (gcry_mpi_point_t point, mpi_ec_t ctx)
     {
     case MPI_EC_WEIERSTRASS:
       {
-        gcry_mpi_t xx = mpi_new (0);
+        gcry_mpi_t xxx = mpi_new (0);
 
-        /* y^2 == x^3 + a·x^2 + b */
+        /* y^2 == x^3 + a·x + b */
         ec_pow2 (y, y, ctx);
 
-        ec_pow2 (xx, x, ctx);
-        ec_mulm (w, ctx->a, xx, ctx);
+        ec_pow3 (xxx, x, ctx);
+        ec_mulm (w, ctx->a, x, ctx);
         ec_addm (w, w, ctx->b, ctx);
-        ec_mulm (xx, xx, x, ctx);
-        ec_addm (w, w, xx, ctx);
+        ec_addm (w, w, xxx, ctx);
 
         if (!mpi_cmp (y, w))
           res = 1;
 
-        gcry_mpi_release (xx);
+        _gcry_mpi_release (xxx);
       }
       break;
     case MPI_EC_MONTGOMERY:
@@ -1265,9 +1292,9 @@ _gcry_mpi_ec_curve_point (gcry_mpi_point_t point, mpi_ec_t ctx)
       break;
     }
 
-  gcry_mpi_release (w);
-  gcry_mpi_release (x);
-  gcry_mpi_release (y);
+  _gcry_mpi_release (w);
+  _gcry_mpi_release (x);
+  _gcry_mpi_release (y);
 
   return res;
 }

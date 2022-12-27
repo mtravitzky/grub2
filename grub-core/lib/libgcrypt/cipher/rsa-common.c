@@ -73,7 +73,6 @@ _gcry_rsa_pkcs1_encode_for_enc (gcry_mpi_t *r_result, unsigned int nbits,
                                 size_t random_override_len)
 {
   gcry_err_code_t rc = 0;
-  gcry_error_t err;
   unsigned char *frame = NULL;
   size_t nframe = (nbits+7) / 8;
   int i;
@@ -86,7 +85,7 @@ _gcry_rsa_pkcs1_encode_for_enc (gcry_mpi_t *r_result, unsigned int nbits,
       return GPG_ERR_TOO_SHORT; /* The key is too short.  */
     }
 
-  if ( !(frame = gcry_malloc_secure (nframe)))
+  if ( !(frame = xtrymalloc_secure (nframe)))
     return gpg_err_code_from_syserror ();
 
   n = 0;
@@ -101,14 +100,14 @@ _gcry_rsa_pkcs1_encode_for_enc (gcry_mpi_t *r_result, unsigned int nbits,
 
       if (random_override_len != i)
         {
-          gcry_free (frame);
+          xfree (frame);
           return GPG_ERR_INV_ARG;
         }
       /* Check that random does not include a zero byte.  */
       for (j=0; j < random_override_len; j++)
         if (!random_override[j])
           {
-            gcry_free (frame);
+            xfree (frame);
             return GPG_ERR_INV_ARG;
           }
       memcpy (frame + n, random_override, random_override_len);
@@ -116,7 +115,7 @@ _gcry_rsa_pkcs1_encode_for_enc (gcry_mpi_t *r_result, unsigned int nbits,
     }
   else
     {
-      p = gcry_random_bytes_secure (i, GCRY_STRONG_RANDOM);
+      p = _gcry_random_bytes_secure (i, GCRY_STRONG_RANDOM);
       /* Replace zero bytes by new values. */
       for (;;)
         {
@@ -133,7 +132,7 @@ _gcry_rsa_pkcs1_encode_for_enc (gcry_mpi_t *r_result, unsigned int nbits,
             break; /* Okay: no (more) zero bytes. */
 
           k += k/128 + 3; /* Better get some more. */
-          pp = gcry_random_bytes_secure (k, GCRY_STRONG_RANDOM);
+          pp = _gcry_random_bytes_secure (k, GCRY_STRONG_RANDOM);
           for (j=0; j < i && k; )
             {
               if (!p[j])
@@ -141,11 +140,11 @@ _gcry_rsa_pkcs1_encode_for_enc (gcry_mpi_t *r_result, unsigned int nbits,
               if (p[j])
                 j++;
             }
-          gcry_free (pp);
+          xfree (pp);
         }
       memcpy (frame+n, p, i);
       n += i;
-      gcry_free (p);
+      xfree (p);
     }
 
   frame[n++] = 0;
@@ -153,12 +152,10 @@ _gcry_rsa_pkcs1_encode_for_enc (gcry_mpi_t *r_result, unsigned int nbits,
   n += valuelen;
   gcry_assert (n == nframe);
 
-  err = gcry_mpi_scan (r_result, GCRYMPI_FMT_USG, frame, n, &nframe);
-  if (err)
-    rc = gcry_err_code (err);
-  else if (DBG_CIPHER)
+  rc = _gcry_mpi_scan (r_result, GCRYMPI_FMT_USG, frame, n, &nframe);
+  if (!rc &&DBG_CIPHER)
     log_mpidump ("PKCS#1 block type 2 encoded data", *r_result);
-  gcry_free (frame);
+  xfree (frame);
 
   return rc;
 }
@@ -179,13 +176,13 @@ _gcry_rsa_pkcs1_decode_for_enc (unsigned char **r_result, size_t *r_resultlen,
 
   *r_result = NULL;
 
-  if ( !(frame = gcry_malloc_secure (nframe)))
+  if ( !(frame = xtrymalloc_secure (nframe)))
     return gpg_err_code_from_syserror ();
 
-  err = gcry_mpi_print (GCRYMPI_FMT_USG, frame, nframe, &n, value);
+  err = _gcry_mpi_print (GCRYMPI_FMT_USG, frame, nframe, &n, value);
   if (err)
     {
-      gcry_free (frame);
+      xfree (frame);
       return gcry_err_code (err);
     }
 
@@ -200,7 +197,7 @@ _gcry_rsa_pkcs1_decode_for_enc (unsigned char **r_result, size_t *r_resultlen,
      first zero byte optional.  */
   if (nframe < 4)
     {
-      gcry_free (frame);
+      xfree (frame);
       return GPG_ERR_ENCODING_PROBLEM;  /* Too short.  */
     }
   n = 0;
@@ -208,7 +205,7 @@ _gcry_rsa_pkcs1_decode_for_enc (unsigned char **r_result, size_t *r_resultlen,
     n++;
   if (frame[n++] != 0x02)
     {
-      gcry_free (frame);
+      xfree (frame);
       return GPG_ERR_ENCODING_PROBLEM;  /* Wrong block type.  */
     }
 
@@ -217,7 +214,7 @@ _gcry_rsa_pkcs1_decode_for_enc (unsigned char **r_result, size_t *r_resultlen,
     ;
   if (n+1 >= nframe)
     {
-      gcry_free (frame);
+      xfree (frame);
       return GPG_ERR_ENCODING_PROBLEM; /* No zero byte.  */
     }
   n++; /* Skip the zero byte.  */
@@ -265,7 +262,6 @@ _gcry_rsa_pkcs1_encode_for_sig (gcry_mpi_t *r_result, unsigned int nbits,
                                 int algo)
 {
   gcry_err_code_t rc = 0;
-  gcry_error_t err;
   byte asn[100];
   byte *frame = NULL;
   size_t nframe = (nbits+7) / 8;
@@ -274,9 +270,9 @@ _gcry_rsa_pkcs1_encode_for_sig (gcry_mpi_t *r_result, unsigned int nbits,
   size_t asnlen, dlen;
 
   asnlen = DIM(asn);
-  dlen = gcry_md_get_algo_dlen (algo);
+  dlen = _gcry_md_get_algo_dlen (algo);
 
-  if (gcry_md_algo_info (algo, GCRYCTL_GET_ASNOID, asn, &asnlen))
+  if (_gcry_md_algo_info (algo, GCRYCTL_GET_ASNOID, asn, &asnlen))
     {
       /* We don't have yet all of the above algorithms.  */
       return GPG_ERR_NOT_IMPLEMENTED;
@@ -296,7 +292,7 @@ _gcry_rsa_pkcs1_encode_for_sig (gcry_mpi_t *r_result, unsigned int nbits,
       return GPG_ERR_TOO_SHORT;
     }
 
-  if ( !(frame = gcry_malloc (nframe)) )
+  if ( !(frame = xtrymalloc (nframe)) )
     return gpg_err_code_from_syserror ();
 
   /* Assemble the pkcs#1 block type 1. */
@@ -315,12 +311,10 @@ _gcry_rsa_pkcs1_encode_for_sig (gcry_mpi_t *r_result, unsigned int nbits,
   gcry_assert (n == nframe);
 
   /* Convert it into an MPI. */
-  err = gcry_mpi_scan (r_result, GCRYMPI_FMT_USG, frame, n, &nframe);
-  if (err)
-    rc = gcry_err_code (err);
-  else if (DBG_CIPHER)
+  rc = _gcry_mpi_scan (r_result, GCRYMPI_FMT_USG, frame, n, &nframe);
+  if (!rc && DBG_CIPHER)
     log_mpidump ("PKCS#1 block type 1 encoded data", *r_result);
-  gcry_free (frame);
+  xfree (frame);
 
   return rc;
 }
@@ -336,11 +330,11 @@ mgf1 (unsigned char *output, size_t outlen, unsigned char *seed, size_t seedlen,
   gcry_md_hd_t hd;
   gcry_error_t err;
 
-  err = gcry_md_open (&hd, algo, 0);
+  err = _gcry_md_open (&hd, algo, 0);
   if (err)
-    return gpg_err_code (err);
+    return err;
 
-  dlen = gcry_md_get_algo_dlen (algo);
+  dlen = _gcry_md_get_algo_dlen (algo);
 
   /* We skip step 1 which would be assert(OUTLEN <= 2^32).  The loop
      in step 3 is merged with step 4 by concatenating no more octets
@@ -353,7 +347,7 @@ mgf1 (unsigned char *output, size_t outlen, unsigned char *seed, size_t seedlen,
       unsigned char c[4], *digest;
 
       if (idx)
-        gcry_md_reset (hd);
+        _gcry_md_reset (hd);
 
       c[0] = (idx >> 24) & 0xFF;
       c[1] = (idx >> 16) & 0xFF;
@@ -361,16 +355,16 @@ mgf1 (unsigned char *output, size_t outlen, unsigned char *seed, size_t seedlen,
       c[3] = idx & 0xFF;
       idx++;
 
-      gcry_md_write (hd, seed, seedlen);
-      gcry_md_write (hd, c, 4);
-      digest = gcry_md_read (hd, 0);
+      _gcry_md_write (hd, seed, seedlen);
+      _gcry_md_write (hd, c, 4);
+      digest = _gcry_md_read (hd, 0);
 
       n = (outlen - nbytes < dlen)? (outlen - nbytes) : dlen;
       memcpy (output+nbytes, digest, n);
       nbytes += n;
     }
 
-  gcry_md_close (hd);
+  _gcry_md_close (hd);
   return GPG_ERR_NO_ERROR;
 }
 
@@ -413,7 +407,6 @@ _gcry_rsa_oaep_encode (gcry_mpi_t *r_result, unsigned int nbits, int algo,
                        const void *random_override, size_t random_override_len)
 {
   gcry_err_code_t rc = 0;
-  gcry_error_t err;
   unsigned char *frame = NULL;
   size_t nframe = (nbits+7) / 8;
   unsigned char *p;
@@ -429,7 +422,7 @@ _gcry_rsa_oaep_encode (gcry_mpi_t *r_result, unsigned int nbits, int algo,
       labellen = 0;
     }
 
-  hlen = gcry_md_get_algo_dlen (algo);
+  hlen = _gcry_md_get_algo_dlen (algo);
 
   /* We skip step 1a which would be to check that LABELLEN is not
      greater than 2^61-1.  See rfc-3447 7.1.1. */
@@ -443,13 +436,13 @@ _gcry_rsa_oaep_encode (gcry_mpi_t *r_result, unsigned int nbits, int algo,
     }
 
   /* Allocate the frame.  */
-  frame = gcry_calloc_secure (1, nframe);
+  frame = xtrycalloc_secure (1, nframe);
   if (!frame)
     return gpg_err_code_from_syserror ();
 
   /* Step 2a: Compute the hash of the label.  We store it in the frame
      where later the maskedDB will commence.  */
-  gcry_md_hash_buffer (algo, frame + 1 + hlen, label, labellen);
+  _gcry_md_hash_buffer (algo, frame + 1 + hlen, label, labellen);
 
   /* Step 2b: Set octet string to zero.  */
   /* This has already been done while allocating FRAME.  */
@@ -465,70 +458,68 @@ _gcry_rsa_oaep_encode (gcry_mpi_t *r_result, unsigned int nbits, int algo,
     {
       if (random_override_len != hlen)
         {
-          gcry_free (frame);
+          xfree (frame);
           return GPG_ERR_INV_ARG;
         }
       memcpy (frame + 1, random_override, hlen);
     }
   else
-    gcry_randomize (frame + 1, hlen, GCRY_STRONG_RANDOM);
+    _gcry_randomize (frame + 1, hlen, GCRY_STRONG_RANDOM);
 
   /* Step 2e and 2f: Create maskedDB.  */
   {
     unsigned char *dmask;
 
-    dmask = gcry_malloc_secure (nframe - hlen - 1);
+    dmask = xtrymalloc_secure (nframe - hlen - 1);
     if (!dmask)
       {
         rc = gpg_err_code_from_syserror ();
-        gcry_free (frame);
+        xfree (frame);
         return rc;
       }
     rc = mgf1 (dmask, nframe - hlen - 1, frame+1, hlen, algo);
     if (rc)
       {
-        gcry_free (dmask);
-        gcry_free (frame);
+        xfree (dmask);
+        xfree (frame);
         return rc;
       }
     for (n = 1 + hlen, p = dmask; n < nframe; n++)
       frame[n] ^= *p++;
-    gcry_free (dmask);
+    xfree (dmask);
   }
 
   /* Step 2g and 2h: Create maskedSeed.  */
   {
     unsigned char *smask;
 
-    smask = gcry_malloc_secure (hlen);
+    smask = xtrymalloc_secure (hlen);
     if (!smask)
       {
         rc = gpg_err_code_from_syserror ();
-        gcry_free (frame);
+        xfree (frame);
         return rc;
       }
     rc = mgf1 (smask, hlen, frame + 1 + hlen, nframe - hlen - 1, algo);
     if (rc)
       {
-        gcry_free (smask);
-        gcry_free (frame);
+        xfree (smask);
+        xfree (frame);
         return rc;
       }
     for (n = 1, p = smask; n < 1 + hlen; n++)
       frame[n] ^= *p++;
-    gcry_free (smask);
+    xfree (smask);
   }
 
   /* Step 2i: Concatenate 0x00, maskedSeed and maskedDB.  */
   /* This has already been done by using in-place operations.  */
 
   /* Convert the stuff into an MPI as expected by the caller.  */
-  err = gcry_mpi_scan (r_result, GCRYMPI_FMT_USG, frame, nframe, NULL);
-  if (err)
-    rc = gcry_err_code (err);
-  else if (DBG_CIPHER)
+  rc = _gcry_mpi_scan (r_result, GCRYMPI_FMT_USG, frame, nframe, NULL);
+  if (!rc && DBG_CIPHER)
     log_mpidump ("OAEP encoded data", *r_result);
-  gcry_free (frame);
+  xfree (frame);
 
   return rc;
 }
@@ -574,13 +565,13 @@ _gcry_rsa_oaep_decode (unsigned char **r_result, size_t *r_resultlen,
     }
 
   /* Get the length of the digest.  */
-  hlen = gcry_md_get_algo_dlen (algo);
+  hlen = _gcry_md_get_algo_dlen (algo);
 
   /* Hash the label right away.  */
-  lhash = gcry_malloc (hlen);
+  lhash = xtrymalloc (hlen);
   if (!lhash)
     return gpg_err_code_from_syserror ();
-  gcry_md_hash_buffer (algo, lhash, label, labellen);
+  _gcry_md_hash_buffer (algo, lhash, label, labellen);
 
   /* Turn the MPI into an octet string.  If the octet string is
      shorter than the key we pad it to the left with zeroes.  This may
@@ -592,7 +583,7 @@ _gcry_rsa_oaep_decode (unsigned char **r_result, size_t *r_resultlen,
   rc = octet_string_from_mpi (&frame, NULL, value, nkey);
   if (rc)
     {
-      gcry_free (lhash);
+      xfree (lhash);
       return GPG_ERR_ENCODING_PROBLEM;
     }
   nframe = nkey;
@@ -600,8 +591,8 @@ _gcry_rsa_oaep_decode (unsigned char **r_result, size_t *r_resultlen,
   /* Step 1c: Check that the key is long enough.  */
   if ( nframe < 2 * hlen + 2 )
     {
-      gcry_free (frame);
-      gcry_free (lhash);
+      xfree (frame);
+      xfree (lhash);
       return GPG_ERR_ENCODING_PROBLEM;
     }
 
@@ -609,12 +600,12 @@ _gcry_rsa_oaep_decode (unsigned char **r_result, size_t *r_resultlen,
      gcry_mpi_aprint above.  */
 
   /* Allocate space for SEED and DB.  */
-  seed = gcry_malloc_secure (nframe - 1);
+  seed = xtrymalloc_secure (nframe - 1);
   if (!seed)
     {
       rc = gpg_err_code_from_syserror ();
-      gcry_free (frame);
-      gcry_free (lhash);
+      xfree (frame);
+      xfree (lhash);
       return rc;
     }
   db = seed + hlen;
@@ -655,11 +646,11 @@ _gcry_rsa_oaep_decode (unsigned char **r_result, size_t *r_resultlen,
   if (frame[0])
     failed = 1;
 
-  gcry_free (lhash);
-  gcry_free (frame);
+  xfree (lhash);
+  xfree (frame);
   if (failed)
     {
-      gcry_free (seed);
+      xfree (seed);
       return GPG_ERR_ENCODING_PROBLEM;
     }
 
@@ -725,7 +716,6 @@ _gcry_rsa_pss_encode (gcry_mpi_t *r_result, unsigned int nbits, int algo,
                       const void *random_override, size_t random_override_len)
 {
   gcry_err_code_t rc = 0;
-  gcry_error_t err;
   size_t hlen;                 /* Length of the hash digest.  */
   unsigned char *em = NULL;    /* Encoded message.  */
   size_t emlen = (nbits+7)/8;  /* Length in bytes of EM.  */
@@ -741,12 +731,12 @@ _gcry_rsa_pss_encode (gcry_mpi_t *r_result, unsigned int nbits, int algo,
   /* This code is implemented as described by rfc-3447 9.1.1.  */
 
   /* Get the length of the digest.  */
-  hlen = gcry_md_get_algo_dlen (algo);
+  hlen = _gcry_md_get_algo_dlen (algo);
   gcry_assert (hlen);  /* We expect a valid ALGO here.  */
 
   /* Allocate a help buffer and setup some pointers.  */
   buflen = 8 + hlen + saltlen + (emlen - hlen - 1);
-  buf = gcry_malloc (buflen);
+  buf = xtrymalloc (buflen);
   if (!buf)
     {
       rc = gpg_err_code_from_syserror ();
@@ -773,7 +763,7 @@ _gcry_rsa_pss_encode (gcry_mpi_t *r_result, unsigned int nbits, int algo,
     }
 
   /* Allocate space for EM.  */
-  em = gcry_malloc (emlen);
+  em = xtrymalloc (emlen);
   if (!em)
     {
       rc = gpg_err_code_from_syserror ();
@@ -794,12 +784,12 @@ _gcry_rsa_pss_encode (gcry_mpi_t *r_result, unsigned int nbits, int algo,
           memcpy (salt, random_override, saltlen);
         }
       else
-        gcry_randomize (salt, saltlen, GCRY_STRONG_RANDOM);
+        _gcry_randomize (salt, saltlen, GCRY_STRONG_RANDOM);
     }
 
   /* Step 5 and 6: M' = Hash(Padding1 || mHash || salt).  */
   memset (buf, 0, 8);  /* Padding.  */
-  gcry_md_hash_buffer (algo, h, buf, 8 + hlen + saltlen);
+  _gcry_md_hash_buffer (algo, h, buf, 8 + hlen + saltlen);
 
   /* Step 7 and 8: DB = PS || 0x01 || salt.  */
   /* Note that we use EM to store DB and later Xor in-place.  */
@@ -822,22 +812,20 @@ _gcry_rsa_pss_encode (gcry_mpi_t *r_result, unsigned int nbits, int algo,
   em[emlen-1] = 0xbc;
 
   /* Convert EM into an MPI.  */
-  err = gcry_mpi_scan (r_result, GCRYMPI_FMT_USG, em, emlen, NULL);
-  if (err)
-    rc = gcry_err_code (err);
-  else if (DBG_CIPHER)
+  rc = _gcry_mpi_scan (r_result, GCRYMPI_FMT_USG, em, emlen, NULL);
+  if (!rc && DBG_CIPHER)
     log_mpidump ("PSS encoded data", *r_result);
 
  leave:
   if (em)
     {
       wipememory (em, emlen);
-      gcry_free (em);
+      xfree (em);
     }
   if (buf)
     {
       wipememory (buf, buflen);
-      gcry_free (buf);
+      xfree (buf);
     }
   return rc;
 }
@@ -869,7 +857,7 @@ _gcry_rsa_pss_verify (gcry_mpi_t value, gcry_mpi_t encoded,
   /* This code is implemented as described by rfc-3447 9.1.2.  */
 
   /* Get the length of the digest.  */
-  hlen = gcry_md_get_algo_dlen (algo);
+  hlen = _gcry_md_get_algo_dlen (algo);
   gcry_assert (hlen);  /* We expect a valid ALGO here.  */
 
   /* Allocate a help buffer and setup some pointers.
@@ -888,7 +876,7 @@ _gcry_rsa_pss_verify (gcry_mpi_t value, gcry_mpi_t encoded,
   if (buflen < emlen - hlen - 1)
     buflen = emlen - hlen - 1;
   buflen += hlen;
-  buf = gcry_malloc (buflen);
+  buf = xtrymalloc (buflen);
   if (!buf)
     {
       rc = gpg_err_code_from_syserror ();
@@ -965,7 +953,7 @@ _gcry_rsa_pss_verify (gcry_mpi_t value, gcry_mpi_t encoded,
   memcpy (buf+8+hlen, salt, saltlen);
 
   /* Step 13:  H' = Hash(M').  */
-  gcry_md_hash_buffer (algo, buf, buf, 8 + hlen + saltlen);
+  _gcry_md_hash_buffer (algo, buf, buf, 8 + hlen + saltlen);
 
   /* Step 14:  Check H == H'.   */
   rc = memcmp (h, buf, hlen) ? GPG_ERR_BAD_SIGNATURE : GPG_ERR_NO_ERROR;
@@ -974,12 +962,12 @@ _gcry_rsa_pss_verify (gcry_mpi_t value, gcry_mpi_t encoded,
   if (em)
     {
       wipememory (em, emlen);
-      gcry_free (em);
+      xfree (em);
     }
   if (buf)
     {
       wipememory (buf, buflen);
-      gcry_free (buf);
+      xfree (buf);
     }
   return rc;
 }

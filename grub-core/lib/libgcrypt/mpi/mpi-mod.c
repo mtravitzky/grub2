@@ -62,7 +62,7 @@ _gcry_mpi_barrett_init (gcry_mpi_t m, int copy)
   gcry_mpi_t tmp;
 
   mpi_normalize (m);
-  ctx = gcry_xcalloc (1, sizeof *ctx);
+  ctx = xcalloc (1, sizeof *ctx);
 
   if (copy)
     {
@@ -99,7 +99,7 @@ _gcry_mpi_barrett_free (mpi_barrett_t ctx)
         mpi_free (ctx->r3);
       if (ctx->m_copied)
         mpi_free (ctx->m);
-      gcry_free (ctx);
+      xfree (ctx);
     }
 }
 
@@ -183,6 +183,6 @@ void
 _gcry_mpi_mul_barrett (gcry_mpi_t w, gcry_mpi_t u, gcry_mpi_t v,
                        mpi_barrett_t ctx)
 {
-  gcry_mpi_mul (w, u, v);
+  mpi_mul (w, u, v);
   mpi_mod_barrett (w, w, ctx);
 }

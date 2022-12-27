@@ -179,7 +179,7 @@ save_pool_prime (gcry_mpi_t prime, gcry_random_level_t randomlevel)
         {
           if (i >= n/3*2)
             {
-              gcry_mpi_release (item2->prime);
+              _gcry_mpi_release (item2->prime);
               item2->prime = NULL;
               if (!item)
                 item = item2;
@@ -188,11 +188,11 @@ save_pool_prime (gcry_mpi_t prime, gcry_random_level_t randomlevel)
     }
   if (!item)
     {
-      item = gcry_calloc (1, sizeof *item);
+      item = xtrycalloc (1, sizeof *item);
       if (!item)
         {
           /* Out of memory.  Silently giving up. */
-          gcry_mpi_release (prime);
+          _gcry_mpi_release (prime);
           return;
         }
       item->next = primepool;
@@ -376,7 +376,7 @@ prime_generate_internal (int need_q_factor,
                pbits, req_qbits, qbits, fbits, n);
 
   /* Allocate an integer to old the new prime. */
-  prime = gcry_mpi_new (pbits);
+  prime = mpi_new (pbits);
 
   /* Generate first prime factor.  */
   q = gen_prime (qbits, is_secret, randomlevel, NULL, NULL);
@@ -386,7 +386,7 @@ prime_generate_internal (int need_q_factor,
     q_factor = gen_prime (req_qbits, is_secret, randomlevel, NULL, NULL);
 
   /* Allocate an array to hold all factors + 2 for later usage.  */
-  factors = gcry_calloc (n + 2, sizeof (*factors));
+  factors = xtrycalloc (n + 2, sizeof (*factors));
   if (!factors)
     {
       err = gpg_err_code_from_errno (errno);
@@ -394,7 +394,7 @@ prime_generate_internal (int need_q_factor,
     }
 
   /* Allocate an array to track pool usage. */
-  pool_in_use = gcry_malloc (n * sizeof *pool_in_use);
+  pool_in_use = xtrymalloc (n * sizeof *pool_in_use);
   if (!pool_in_use)
     {
       err = gpg_err_code_from_errno (errno);
@@ -413,7 +413,7 @@ prime_generate_internal (int need_q_factor,
     m += 5;
   if (m < 30)
     m = 30;
-  pool = gcry_calloc (m , sizeof (*pool));
+  pool = xtrycalloc (m , sizeof (*pool));
   if (! pool)
     {
       err = gpg_err_code_from_errno (errno);
@@ -439,7 +439,7 @@ prime_generate_internal (int need_q_factor,
             }
 
           /* Init m_out_of_n().  */
-          perms = gcry_calloc (1, m);
+          perms = xtrycalloc (1, m);
           if (!perms)
             {
               err = gpg_err_code_from_errno (errno);
@@ -531,7 +531,7 @@ prime_generate_internal (int need_q_factor,
           if (i == n)
             {
               /* Ran out of permutations: Allocate new primes.  */
-              gcry_free (perms);
+              xfree (perms);
               perms = NULL;
               progress ('!');
               goto next_try;
@@ -604,7 +604,7 @@ prime_generate_internal (int need_q_factor,
   if (ret_factors)
     {
       /* Caller wants the factors.  */
-      factors_new = gcry_calloc (n + 4, sizeof (*factors_new));
+      factors_new = xtrycalloc (n + 4, sizeof (*factors_new));
       if (! factors_new)
         {
           err = gpg_err_code_from_errno (errno);
@@ -614,7 +614,7 @@ prime_generate_internal (int need_q_factor,
       if (all_factors)
         {
           i = 0;
-          factors_new[i++] = gcry_mpi_set_ui (NULL, 2);
+          factors_new[i++] = mpi_set_ui (NULL, 2);
           factors_new[i++] = mpi_copy (q);
           if (need_q_factor)
             factors_new[i++] = mpi_copy (q_factor);
@@ -663,7 +663,7 @@ prime_generate_internal (int need_q_factor,
                   mpi_fdiv_q (tmp, pmin1, factors[i]);
                   /* No mpi_pow(), but it is okay to use this with mod
                      prime.  */
-                  gcry_mpi_powm (b, g, tmp, prime);
+                  mpi_powm (b, g, tmp, prime);
                   if (! mpi_cmp_ui (b, 1))
                     break;
                 }
@@ -706,13 +706,13 @@ prime_generate_internal (int need_q_factor,
       if (is_locked && ath_mutex_unlock (&primepool_lock))
         err = GPG_ERR_INTERNAL;
       is_locked = 0;
-      gcry_free (pool);
+      xfree (pool);
     }
-  gcry_free (pool_in_use);
+  xfree (pool_in_use);
   if (factors)
-    gcry_free (factors);  /* Factors are shallow copies.  */
+    xfree (factors);  /* Factors are shallow copies.  */
   if (perms)
-    gcry_free (perms);
+    xfree (perms);
 
   mpi_free (val_2);
   mpi_free (q);
@@ -730,7 +730,7 @@ prime_generate_internal (int need_q_factor,
 	{
 	  for (i = 0; factors_new[i]; i++)
 	    mpi_free (factors_new[i]);
-	  gcry_free (factors_new);
+	  xfree (factors_new);
 	}
       mpi_free (prime);
     }
@@ -772,11 +772,11 @@ gen_prime (unsigned int nbits, int secret, int randomlevel,
   if (nbits < 16)
     log_fatal ("can't generate a prime with less than %d bits\n", 16);
 
-  mods = gcry_xmalloc( no_of_small_prime_numbers * sizeof *mods );
+  mods = xmalloc (no_of_small_prime_numbers * sizeof *mods);
   /* Make nbits fit into gcry_mpi_t implementation. */
   val_2  = mpi_alloc_set_ui( 2 );
   val_3 = mpi_alloc_set_ui( 3);
-  prime  = secret? gcry_mpi_snew ( nbits ): gcry_mpi_new ( nbits );
+  prime  = secret? mpi_snew (nbits): mpi_new (nbits);
   result = mpi_alloc_like( prime );
   pminus1= mpi_alloc_like( prime );
   ptest  = mpi_alloc_like( prime );
@@ -786,7 +786,7 @@ gen_prime (unsigned int nbits, int secret, int randomlevel,
       int dotcount=0;
 
       /* generate a random number */
-      gcry_mpi_randomize( prime, nbits, randomlevel );
+      _gcry_mpi_randomize( prime, nbits, randomlevel );
 
       /* Set high order bit to 1, set low order bit to 1.  If we are
          generating a secret prime we are most probably doing that
@@ -821,7 +821,7 @@ gen_prime (unsigned int nbits, int secret, int randomlevel,
           /* Do a fast Fermat test now. */
           count2++;
           mpi_sub_ui( pminus1, ptest, 1);
-          gcry_mpi_powm( result, val_2, pminus1, ptest );
+          mpi_powm( result, val_2, pminus1, ptest );
           if ( !mpi_cmp_ui( result, 1 ) )
             {
               /* Not composite, perform stronger tests */
@@ -848,7 +848,7 @@ gen_prime (unsigned int nbits, int secret, int randomlevel,
                       mpi_free(result);
                       mpi_free(pminus1);
                       mpi_free(prime);
-                      gcry_free(mods);
+                      xfree(mods);
                       return ptest;
                     }
                 }
@@ -887,7 +887,7 @@ check_prime( gcry_mpi_t prime, gcry_mpi_t val_2, int rm_rounds,
     gcry_mpi_t result = mpi_alloc_like( prime );
     gcry_mpi_t pminus1 = mpi_alloc_like( prime );
     mpi_sub_ui( pminus1, prime, 1);
-    gcry_mpi_powm( result, val_2, pminus1, prime );
+    mpi_powm( result, val_2, pminus1, prime );
     mpi_free( pminus1 );
     if ( mpi_cmp_ui( result, 1 ) )
       {
@@ -949,7 +949,7 @@ is_prime (gcry_mpi_t n, int steps, unsigned int *count)
         }
       else
         {
-          gcry_mpi_randomize( x, nbits, GCRY_WEAK_RANDOM );
+          _gcry_mpi_randomize( x, nbits, GCRY_WEAK_RANDOM );
 
           /* Make sure that the number is smaller than the prime and
              keep the randomness of the high bit. */
@@ -964,12 +964,12 @@ is_prime (gcry_mpi_t n, int steps, unsigned int *count)
             }
           gcry_assert (mpi_cmp (x, nminus1) < 0 && mpi_cmp_ui (x, 1) > 0);
 	}
-      gcry_mpi_powm ( y, x, q, n);
+      mpi_powm ( y, x, q, n);
       if ( mpi_cmp_ui(y, 1) && mpi_cmp( y, nminus1 ) )
         {
           for ( j=1; j < k && mpi_cmp( y, nminus1 ); j++ )
             {
-              gcry_mpi_powm(y, y, a2, n);
+              mpi_powm(y, y, a2, n);
               if( !mpi_cmp_ui( y, 1 ) )
                 goto leave; /* Not a prime. */
             }
@@ -1121,67 +1121,66 @@ m_out_of_n ( char *array, int m, int n )
    non-zero, allocate a new, NULL-terminated array holding the prime
    factors and store it in FACTORS.  FLAGS might be used to influence
    the prime number generation process.  */
-gcry_error_t
-gcry_prime_generate (gcry_mpi_t *prime, unsigned int prime_bits,
-		     unsigned int factor_bits, gcry_mpi_t **factors,
-		     gcry_prime_check_func_t cb_func, void *cb_arg,
-		     gcry_random_level_t random_level,
-		     unsigned int flags)
+gcry_err_code_t
+_gcry_prime_generate (gcry_mpi_t *prime, unsigned int prime_bits,
+                      unsigned int factor_bits, gcry_mpi_t **factors,
+                      gcry_prime_check_func_t cb_func, void *cb_arg,
+                      gcry_random_level_t random_level,
+                      unsigned int flags)
 {
-  gcry_err_code_t err = GPG_ERR_NO_ERROR;
+  gcry_err_code_t rc = 0;
   gcry_mpi_t *factors_generated = NULL;
   gcry_mpi_t prime_generated = NULL;
   unsigned int mode = 0;
 
   if (!prime)
-    return gpg_error (GPG_ERR_INV_ARG);
+    return GPG_ERR_INV_ARG;
   *prime = NULL;
 
   if (flags & GCRY_PRIME_FLAG_SPECIAL_FACTOR)
     mode = 1;
 
   /* Generate.  */
-  err = prime_generate_internal ((mode==1), &prime_generated, prime_bits,
-				 factor_bits, NULL,
-                                 factors? &factors_generated : NULL,
-				 random_level, flags, 1,
-                                 cb_func, cb_arg);
+  rc = prime_generate_internal ((mode==1), &prime_generated, prime_bits,
+                                factor_bits, NULL,
+                                factors? &factors_generated : NULL,
+                                random_level, flags, 1,
+                                cb_func, cb_arg);
 
-  if (! err)
-    if (cb_func)
-      {
-	/* Additional check. */
-	if ( !cb_func (cb_arg, GCRY_PRIME_CHECK_AT_FINISH, prime_generated))
-	  {
-	    /* Failed, deallocate resources.  */
-	    unsigned int i;
+  if (!rc && cb_func)
+    {
+      /* Additional check. */
+      if ( !cb_func (cb_arg, GCRY_PRIME_CHECK_AT_FINISH, prime_generated))
+        {
+          /* Failed, deallocate resources.  */
+          unsigned int i;
 
-	    mpi_free (prime_generated);
-            if (factors)
-              {
-                for (i = 0; factors_generated[i]; i++)
-                  mpi_free (factors_generated[i]);
-                gcry_free (factors_generated);
-              }
-	    err = GPG_ERR_GENERAL;
-	  }
-      }
+          mpi_free (prime_generated);
+          if (factors)
+            {
+              for (i = 0; factors_generated[i]; i++)
+                mpi_free (factors_generated[i]);
+              xfree (factors_generated);
+            }
+          rc = GPG_ERR_GENERAL;
+        }
+    }
 
-  if (! err)
+  if (!rc)
     {
       if (factors)
         *factors = factors_generated;
       *prime = prime_generated;
     }
 
-  return gcry_error (err);
+  return rc;
 }
 
 /* Check whether the number X is prime.  */
-gcry_error_t
-gcry_prime_check (gcry_mpi_t x, unsigned int flags)
+gcry_err_code_t
+_gcry_prime_check (gcry_mpi_t x, unsigned int flags)
 {
-  gcry_err_code_t err = GPG_ERR_NO_ERROR;
+  gcry_err_code_t rc = 0;
   gcry_mpi_t val_2 = mpi_alloc_set_ui (2); /* Used by the Fermat test. */
 
   (void)flags;
@@ -1189,37 +1188,37 @@ gcry_prime_check (gcry_mpi_t x, unsigned int flags)
   /* We use 64 rounds because the prime we are going to test is not
      guaranteed to be a random one. */
   if (! check_prime (x, val_2, 64, NULL, NULL))
-    err = GPG_ERR_NO_PRIME;
+    rc = GPG_ERR_NO_PRIME;
 
   mpi_free (val_2);
 
-  return gcry_error (err);
+  return rc;
 }
 
 /* Find a generator for PRIME where the factorization of (prime-1) is
    in the NULL terminated array FACTORS. Return the generator as a
    newly allocated MPI in R_G.  If START_G is not NULL, use this as s
    atart for the search. Returns 0 on success.*/
-gcry_error_t
-gcry_prime_group_generator (gcry_mpi_t *r_g,
-                            gcry_mpi_t prime, gcry_mpi_t *factors,
-                            gcry_mpi_t start_g)
+gcry_err_code_t
+_gcry_prime_group_generator (gcry_mpi_t *r_g,
+                             gcry_mpi_t prime, gcry_mpi_t *factors,
+                             gcry_mpi_t start_g)
 {
-  gcry_mpi_t tmp = gcry_mpi_new (0);
-  gcry_mpi_t b = gcry_mpi_new (0);
-  gcry_mpi_t pmin1 = gcry_mpi_new (0);
-  gcry_mpi_t g = start_g? gcry_mpi_copy (start_g) : gcry_mpi_set_ui (NULL, 3);
+  gcry_mpi_t tmp   = mpi_new (0);
+  gcry_mpi_t b     = mpi_new (0);
+  gcry_mpi_t pmin1 = mpi_new (0);
+  gcry_mpi_t g = start_g? mpi_copy (start_g) : mpi_set_ui (NULL, 3);
   int first = 1;
   int i, n;
 
   if (!factors || !r_g || !prime)
-    return gpg_error (GPG_ERR_INV_ARG);
+    return GPG_ERR_INV_ARG;
   *r_g = NULL;
 
   for (n=0; factors[n]; n++)
     ;
   if (n < 2)
-    return gpg_error (GPG_ERR_INV_ARG);
+    return GPG_ERR_INV_ARG;
 
   /* Extra sanity check - usually disabled. */
 /*   mpi_set (tmp, factors[0]); */
@@ -1229,13 +1228,13 @@ gcry_prime_group_generator (gcry_mpi_t *r_g,
 /*   if (mpi_cmp (prime, tmp)) */
 /*     return gpg_error (GPG_ERR_INV_ARG); */
 
-  gcry_mpi_sub_ui (pmin1, prime, 1);
+  mpi_sub_ui (pmin1, prime, 1);
   do
     {
       if (first)
         first = 0;
       else
-        gcry_mpi_add_ui (g, g, 1);
+        mpi_add_ui (g, g, 1);
 
       if (DBG_CIPHER)
         log_printmpi ("checking g", g);
@@ -1245,7 +1244,7 @@ gcry_prime_group_generator (gcry_mpi_t *r_g,
       for (i = 0; i < n; i++)
         {
           mpi_fdiv_q (tmp, pmin1, factors[i]);
-          gcry_mpi_powm (b, g, tmp, prime);
+          mpi_powm (b, g, tmp, prime);
           if (! mpi_cmp_ui (b, 1))
             break;
         }
@@ -1254,9 +1253,9 @@ gcry_prime_group_generator (gcry_mpi_t *r_g,
     }
   while (i < n);
 
-  gcry_mpi_release (tmp);
-  gcry_mpi_release (b);
-  gcry_mpi_release (pmin1);
+  _gcry_mpi_release (tmp);
+  _gcry_mpi_release (b);
+  _gcry_mpi_release (pmin1);
   *r_g = g;
 
   return 0;
@@ -1264,7 +1263,7 @@ gcry_prime_group_generator (gcry_mpi_t *r_g,
 
 /* Convenience function to release the factors array. */
 void
-gcry_prime_release_factors (gcry_mpi_t *factors)
+_gcry_prime_release_factors (gcry_mpi_t *factors)
 {
   if (factors)
     {
@@ -1272,7 +1271,7 @@ gcry_prime_release_factors (gcry_mpi_t *factors)
 
       for (i=0; factors[i]; i++)
         mpi_free (factors[i]);
-      gcry_free (factors);
+      xfree (factors);
     }
 }
 
@@ -1285,7 +1284,7 @@ find_x931_prime (const gcry_mpi_t pfirst)
   gcry_mpi_t val_2 = mpi_alloc_set_ui (2);
   gcry_mpi_t prime;
 
-  prime = gcry_mpi_copy (pfirst);
+  prime = mpi_copy (pfirst);
   /* If P is even add 1.  */
   mpi_set_bit (prime, 0);
 
@@ -1389,7 +1388,7 @@ _gcry_derive_x931_prime (const gcry_mpi_t xp,
     mpi_sub_ui (yp0, yp0, 1);   /* Ditto.  */
     for (;;)
       {
-        gcdres = gcry_mpi_gcd (gcdtmp, e, yp0);
+        gcdres = mpi_gcd (gcdtmp, e, yp0);
         mpi_add_ui (yp0, yp0, 1);
         if (!gcdres)
           progress ('/');  /* gcd (e, yp0-1) != 1  */
@@ -1458,7 +1457,7 @@ _gcry_generate_fips186_2_prime (unsigned int pbits, unsigned int qbits,
     return GPG_ERR_INV_ARG;
 
   /* Allocate a buffer to later compute SEED+some_increment. */
-  seed_plus = gcry_malloc (seedlen < 20? 20:seedlen);
+  seed_plus = xtrymalloc (seedlen < 20? 20:seedlen);
   if (!seed_plus)
     {
       ec = gpg_err_code_from_syserror ();
@@ -1468,8 +1467,8 @@ _gcry_generate_fips186_2_prime (unsigned int pbits, unsigned int qbits,
   val_2   = mpi_alloc_set_ui (2);
   value_n = (pbits - 1) / qbits;
   value_b = (pbits - 1) - value_n * qbits;
-  value_w = gcry_mpi_new (pbits);
-  value_x = gcry_mpi_new (pbits);
+  value_w = mpi_new (pbits);
+  value_x = mpi_new (pbits);
 
  restart:
   /* Generate Q.  */
@@ -1479,7 +1478,7 @@ _gcry_generate_fips186_2_prime (unsigned int pbits, unsigned int qbits,
       if (!seed)
         {
           seedlen = sizeof seed_help_buffer;
-          gcry_create_nonce (seed_help_buffer, seedlen);
+          _gcry_create_nonce (seed_help_buffer, seedlen);
           seed = seed_help_buffer;
         }
 
@@ -1491,15 +1490,15 @@ _gcry_generate_fips186_2_prime (unsigned int pbits, unsigned int qbits,
           if (seed_plus[i])
             break;
         }
-      gcry_md_hash_buffer (GCRY_MD_SHA1, value_u, seed, seedlen);
-      gcry_md_hash_buffer (GCRY_MD_SHA1, digest, seed_plus, seedlen);
+      _gcry_md_hash_buffer (GCRY_MD_SHA1, value_u, seed, seedlen);
+      _gcry_md_hash_buffer (GCRY_MD_SHA1, digest, seed_plus, seedlen);
       for (i=0; i < sizeof value_u; i++)
         value_u[i] ^= digest[i];
 
       /* Step 3:  Form q from U  */
-      gcry_mpi_release (prime_q); prime_q = NULL;
-      ec = gpg_err_code (gcry_mpi_scan (&prime_q, GCRYMPI_FMT_USG,
-                                        value_u, sizeof value_u, NULL));
+      _gcry_mpi_release (prime_q); prime_q = NULL;
+      ec = _gcry_mpi_scan (&prime_q, GCRYMPI_FMT_USG,
+                           value_u, sizeof value_u, NULL);
       if (ec)
         goto leave;
       mpi_set_highbit (prime_q, qbits-1 );
@@ -1518,7 +1517,7 @@ _gcry_generate_fips186_2_prime (unsigned int pbits, unsigned int qbits,
   counter = 0;
 
   /* Generate P. */
-  prime_p = gcry_mpi_new (pbits);
+  prime_p = mpi_new (pbits);
   for (;;)
     {
       /* Step 7: For k = 0,...n let
@@ -1544,11 +1543,11 @@ _gcry_generate_fips186_2_prime (unsigned int pbits, unsigned int qbits,
               if (seed_plus[i])
                 break;
             }
-          gcry_md_hash_buffer (GCRY_MD_SHA1, digest, seed_plus, seedlen);
+          _gcry_md_hash_buffer (GCRY_MD_SHA1, digest, seed_plus, seedlen);
 
-          gcry_mpi_release (tmpval); tmpval = NULL;
-          ec = gpg_err_code (gcry_mpi_scan (&tmpval, GCRYMPI_FMT_USG,
-                                            digest, sizeof digest, NULL));
+          _gcry_mpi_release (tmpval); tmpval = NULL;
+          ec = _gcry_mpi_scan (&tmpval, GCRYMPI_FMT_USG,
+                               digest, sizeof digest, NULL);
           if (ec)
             goto leave;
           if (value_k == value_n)
@@ -1610,13 +1609,13 @@ _gcry_generate_fips186_2_prime (unsigned int pbits, unsigned int qbits,
 
 
  leave:
-  gcry_mpi_release (tmpval);
-  gcry_mpi_release (value_x);
-  gcry_mpi_release (value_w);
-  gcry_mpi_release (prime_p);
-  gcry_mpi_release (prime_q);
-  gcry_free (seed_plus);
-  gcry_mpi_release (val_2);
+  _gcry_mpi_release (tmpval);
+  _gcry_mpi_release (value_x);
+  _gcry_mpi_release (value_w);
+  _gcry_mpi_release (prime_p);
+  _gcry_mpi_release (prime_q);
+  xfree (seed_plus);
+  _gcry_mpi_release (val_2);
   return ec;
 }
 
@@ -1681,11 +1680,11 @@ _gcry_generate_fips186_3_prime (unsigned int pbits, unsigned int qbits,
     return GPG_ERR_INV_KEYLEN;
 
   /* Also check that the hash algorithm is available.  */
-  ec = gpg_err_code (gcry_md_test_algo (hashalgo));
+  ec = _gcry_md_test_algo (hashalgo);
   if (ec)
     return ec;
   gcry_assert (qbits/8 <= sizeof digest);
-  gcry_assert (gcry_md_get_algo_dlen (hashalgo) == qbits/8);
+  gcry_assert (_gcry_md_get_algo_dlen (hashalgo) == qbits/8);
 
 
   /* Step 2:  Check seedlen.  */
@@ -1696,16 +1695,16 @@ _gcry_generate_fips186_3_prime (unsigned int pbits, unsigned int qbits,
 
   /* Allocate a buffer to later compute SEED+some_increment and a few
      helper variables.  */
-  seed_plus = gcry_malloc (seedlen < sizeof seed_help_buffer?
-                           sizeof seed_help_buffer : seedlen);
+  seed_plus = xtrymalloc (seedlen < sizeof seed_help_buffer?
+                          sizeof seed_help_buffer : seedlen);
   if (!seed_plus)
     {
       ec = gpg_err_code_from_syserror ();
       goto leave;
     }
   val_2   = mpi_alloc_set_ui (2);
-  value_w = gcry_mpi_new (pbits);
-  value_x = gcry_mpi_new (pbits);
+  value_w = mpi_new (pbits);
+  value_x = mpi_new (pbits);
 
   /* Step 3: n = \lceil L / outlen \rceil - 1  */
   value_n = (pbits + qbits - 1) / qbits - 1;
@@ -1721,12 +1720,12 @@ _gcry_generate_fips186_3_prime (unsigned int pbits, unsigned int qbits,
         {
           seedlen = qbits/8;
           gcry_assert (seedlen <= sizeof seed_help_buffer);
-          gcry_create_nonce (seed_help_buffer, seedlen);
+          _gcry_create_nonce (seed_help_buffer, seedlen);
           seed = seed_help_buffer;
         }
 
       /* Step 6:  U = hash(seed)  */
-      gcry_md_hash_buffer (hashalgo, value_u, seed, seedlen);
+      _gcry_md_hash_buffer (hashalgo, value_u, seed, seedlen);
 
       /* Step 7:  q = 2^{N-1} + U + 1 - (U mod 2)  */
       if ( !(value_u[qbits/8-1] & 0x01) )
@@ -1738,9 +1737,9 @@ _gcry_generate_fips186_3_prime (unsigned int pbits, unsigned int qbits,
                 break;
             }
         }
-      gcry_mpi_release (prime_q); prime_q = NULL;
-      ec = gpg_err_code (gcry_mpi_scan (&prime_q, GCRYMPI_FMT_USG,
-                                        value_u, sizeof value_u, NULL));
+      _gcry_mpi_release (prime_q); prime_q = NULL;
+      ec = _gcry_mpi_scan (&prime_q, GCRYMPI_FMT_USG,
+                           value_u, sizeof value_u, NULL);
       if (ec)
         goto leave;
       mpi_set_highbit (prime_q, qbits-1 );
@@ -1761,7 +1760,7 @@ _gcry_generate_fips186_3_prime (unsigned int pbits, unsigned int qbits,
   counter = 0;
 
   /* Generate P. */
-  prime_p = gcry_mpi_new (pbits);
+  prime_p = mpi_new (pbits);
   for (;;)
     {
       /* Step 11.1: For j = 0,...n let
@@ -1785,11 +1784,11 @@ _gcry_generate_fips186_3_prime (unsigned int pbits, unsigned int qbits,
               if (seed_plus[i])
                 break;
             }
-          gcry_md_hash_buffer (GCRY_MD_SHA1, digest, seed_plus, seedlen);
+          _gcry_md_hash_buffer (GCRY_MD_SHA1, digest, seed_plus, seedlen);
 
-          gcry_mpi_release (tmpval); tmpval = NULL;
-          ec = gpg_err_code (gcry_mpi_scan (&tmpval, GCRYMPI_FMT_USG,
-                                            digest, sizeof digest, NULL));
+          _gcry_mpi_release (tmpval); tmpval = NULL;
+          ec = _gcry_mpi_scan (&tmpval, GCRYMPI_FMT_USG,
+                               digest, sizeof digest, NULL);
           if (ec)
             goto leave;
           if (value_j == value_n)
@@ -1853,12 +1852,12 @@ _gcry_generate_fips186_3_prime (unsigned int pbits, unsigned int qbits,
     *r_hashalgo = hashalgo;
 
  leave:
-  gcry_mpi_release (tmpval);
-  gcry_mpi_release (value_x);
-  gcry_mpi_release (value_w);
-  gcry_mpi_release (prime_p);
-  gcry_mpi_release (prime_q);
-  gcry_free (seed_plus);
-  gcry_mpi_release (val_2);
+  _gcry_mpi_release (tmpval);
+  _gcry_mpi_release (value_x);
+  _gcry_mpi_release (value_w);
+  _gcry_mpi_release (prime_p);
+  _gcry_mpi_release (prime_q);
+  xfree (seed_plus);
+  _gcry_mpi_release (val_2);
   return ec;
 }

@@ -80,8 +80,7 @@ gpg_err_code_t _gcry_ecc_update_curve_param (const char *name,
 const char *_gcry_ecc_get_curve (gcry_sexp_t keyparms,
                                  int iterator,
                                  unsigned int *r_nbits);
-gcry_err_code_t _gcry_ecc_get_param (const char *name, gcry_mpi_t *pkey);
-gcry_sexp_t     _gcry_ecc_get_param_sexp (const char *name);
+gcry_sexp_t _gcry_ecc_get_param_sexp (const char *name);
 
 /*-- ecc-misc.c --*/
 void _gcry_ecc_curve_free (elliptic_curve_t *E);
@@ -89,9 +88,10 @@ elliptic_curve_t _gcry_ecc_curve_copy (elliptic_curve_t E);
 const char *_gcry_ecc_model2str (enum gcry_mpi_ec_models model);
 const char *_gcry_ecc_dialect2str (enum ecc_dialects dialect);
 gcry_mpi_t   _gcry_ecc_ec2os (gcry_mpi_t x, gcry_mpi_t y, gcry_mpi_t p);
-gcry_error_t _gcry_ecc_os2ec (mpi_point_t result, gcry_mpi_t value);
+gcry_err_code_t _gcry_ecc_os2ec (mpi_point_t result, gcry_mpi_t value);
 
-mpi_point_t  _gcry_ecc_compute_public (mpi_point_t Q, mpi_ec_t ec);
+mpi_point_t  _gcry_ecc_compute_public (mpi_point_t Q, mpi_ec_t ec,
+                                       mpi_point_t G, gcry_mpi_t d);
 
 /*-- ecc.c --*/
 
@@ -115,6 +115,8 @@ gpg_err_code_t _gcry_ecc_eddsa_decodepoint (gcry_mpi_t pk, mpi_ec_t ctx,
                                             mpi_point_t result,
                                             unsigned char **r_encpk,
                                             unsigned int *r_encpklen);
+gpg_err_code_t _gcry_ecc_eddsa_compute_h_d (unsigned char **r_digest,
+                                            gcry_mpi_t d, mpi_ec_t ec);
 
 gpg_err_code_t _gcry_ecc_eddsa_genkey (ECC_secret_key *sk,
                                        elliptic_curve_t *E,
