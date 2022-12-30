@@ -502,7 +502,7 @@ void __gcry_burn_stack (unsigned int bytes);
 void __gcry_burn_stack_dummy (void);
 void _gcry_log_error( const char *fmt, ... )  __attribute__ ((format (printf, 1, 2)));
 void _gcry_bug(const char *file, int line, const char *func);
-
+unsigned int _gcry_get_hw_features (void);
 
 #ifdef GRUB_UTIL
 void grub_gcry_init_all (void);

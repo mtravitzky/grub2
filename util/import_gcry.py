@@ -610,7 +610,6 @@ fw.write ("#include <cipher_wrap.h>\n")
 chlog = "%s	* g10lib.h: Likewise.\n" % chlog
 fw.close ()
 
-infile = os.path.join (cipher_dir_in, "ChangeLog")
 outfile = os.path.join (cipher_dir_out, "ChangeLog")
 
 conf.close ();
@@ -641,7 +640,6 @@ confutil.write ("};\n");
 confutil.close ();
 
 
-f=codecs.open (infile, "r", "utf-8")
 fw=codecs.open (outfile, "w", "utf-8")
 dt = datetime.date.today ()
 fw.write ("%04d-%02d-%02d  Automatic import tool\n" % \
@@ -651,7 +649,4 @@ fw.write ("	Imported ciphers to GRUB\n")
 fw.write ("\n")
 fw.write (chlog)
 fw.write ("\n")
-for line in f:
-    fw.write (line)
-f.close ()
 fw.close ()

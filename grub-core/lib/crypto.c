@@ -99,6 +99,12 @@ _gcry_bug(const char *file, int line, const char *func)
   grub_fatal ("... this is a bug (%s:%d:%s)\n", file, line, func);
 }
 
+unsigned int
+_gcry_get_hw_features (void)
+{
+  return 0;
+}
+
 void 
 grub_cipher_register (gcry_cipher_spec_t *cipher)
 {
