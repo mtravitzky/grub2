@@ -82,6 +82,12 @@ _gcry_xrealloc (void *a, size_t n)
   return ret;
 }
 
+void *
+_gcry_realloc (void *a, size_t n)
+{
+  return _gcry_xrealloc (a, n);
+}
+
 void
 _gcry_check_heap (const void *a __attribute__ ((unused)))
 {
@@ -149,3 +155,10 @@ gpg_err_code_from_syserror (void)
 {
   return gpg_error_from_syserror();
 }
+
+gpg_err_code_t
+gpg_err_code_from_errno (int err)
+{
+  return GPG_ERR_GENERAL;
+}
+

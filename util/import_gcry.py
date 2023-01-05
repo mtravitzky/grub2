@@ -209,7 +209,7 @@ for cipher_file in cipher_files:
                 hold = False
                 # We're optimising for size and exclude anything needing good
                 # randomness.
-                if not re.match ("(run_selftests|selftest|_gcry_aes_c.._..c|_gcry_[a-z0-9]*_hash_buffer|tripledes_set2keys|do_tripledes_set_extra_info|_gcry_rmd160_mixblock|serpent_test|dsa_generate_ext|test_keys|gen_k|sign|gen_x931_parm_xp|generate_x931|generate_key|dsa_generate|dsa_sign|ecc_sign|generate|generate_fips186|_gcry_register_pk_dsa_progress|_gcry_register_pk_ecc_progress|progress|scanval|ec2os|ecc_generate_ext|ecc_generate|compute_keygrip|ecc_get_param|_gcry_register_pk_dsa_progress|gen_x931_parm_xp|gen_x931_parm_xi|rsa_decrypt|rsa_sign|rsa_generate_ext|rsa_generate|secret|check_exponent|rsa_blind|rsa_unblind|extract_a_from_sexp|curve_free|curve_copy|point_set|_gcry_hash_selftest_check_one|rsa_encrypt|rsa_verify|rsa_check_secret_key|rsa_get_nbits|dsa_(verify|get_nbits|check_secret_key))", line) is None:
+                if not re.match ("(run_selftests|selftest|_gcry_aes_c.._..c|_gcry_[a-z0-9]*_hash_buffer|tripledes_set2keys|do_tripledes_set_extra_info|_gcry_rmd160_mixblock|serpent_test|dsa_generate_ext|test_keys|gen_k|sign|gen_x931_parm_xp|generate_x931|generate_key|dsa_generate|dsa_sign|ecc_sign|generate|generate_fips186|_gcry_register_pk_dsa_progress|_gcry_register_pk_ecc_progress|progress|scanval|ec2os|ecc_generate_ext|ecc_generate|compute_keygrip|ecc_get_param|_gcry_register_pk_dsa_progress|gen_x931_parm_xp|gen_x931_parm_xi|rsa_decrypt|rsa_sign|rsa_generate_ext|rsa_generate|secret|check_exponent|rsa_blind|rsa_unblind|extract_a_from_sexp|curve_free|curve_copy|point_set|_gcry_hash_selftest_check_one|rsa_encrypt|rsa_check_secret_key|dsa_(verify|get_nbits|check_secret_key))", line) is None:
 
                     skip = 1
                     if not re.match ("selftest", line) is None and cipher_file == "idea.c":
@@ -239,7 +239,10 @@ for cipher_file in cipher_files:
                         fw.write ("#define compute_keygrip 0");
                     if not re.match ("do_tripledes_set_extra_info", line) is None:
                         fw.write ("#define do_tripledes_set_extra_info 0");
-		    m = re.match ("(rsa|dsa)_(verify|check_secret_key|get_nbits)", line)
+		    m = re.match ("dsa_(verify|check_secret_key|get_nbits)", line)
+		    if not m is None:
+			fw.write ("#define %s 0" % m.group ())
+		    m = re.match ("rsa_(check_secret_key|get_nbits)", line)
 		    if not m is None:
 			fw.write ("#define %s 0" % m.group ())
                     fname = re.match ("[a-zA-Z0-9_]*", line).group ()
@@ -511,7 +514,7 @@ for src in sorted (os.listdir (os.path.join (indir, "src"))):
             or src == "libgcrypt.vers" or src == "Makefile.am" \
             or src == "Manifest" or src == "misc.c" \
             or src == "missing-string.c" or src == "module.c" \
-            or src == "secmem.c" or src == "sexp.c" \
+            or src == "secmem.c" \
             or src == "stdmem.c" or src == "visibility.c":
         continue
     outfile = os.path.join (basedir, "src", src)

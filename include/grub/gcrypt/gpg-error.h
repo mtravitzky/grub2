@@ -26,6 +26,12 @@ gpg_err_source (gpg_error_t err __attribute__ ((unused)))
   return GPG_ERR_SOURCE_USER_1;
 }
 
+static inline gpg_error_t
+gpg_error (gpg_err_code_t code)
+{
+  return code;
+}
+
 gcry_err_code_t
 gpg_error_from_syserror (void);
 

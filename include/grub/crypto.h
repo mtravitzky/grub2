@@ -34,6 +34,7 @@ typedef enum
     GPG_ERR_BAD_MPI,
     GPG_ERR_BAD_SECKEY,
     GPG_ERR_BAD_SIGNATURE,
+    GPG_ERR_BUFFER_TOO_SHORT,
     GPG_ERR_CIPHER_ALGO,
     GPG_ERR_CONFLICT,
     GPG_ERR_DECRYPT_FAILED,
@@ -51,6 +52,7 @@ typedef enum
     GPG_ERR_INV_OP,
     GPG_ERR_INV_SEXP,
     GPG_ERR_INV_VALUE,
+    GPG_ERR_LIMIT_REACHED,
     GPG_ERR_MISSING_VALUE,
     GPG_ERR_NO_ENCRYPTION_SCHEME,
     GPG_ERR_NO_OBJ,
@@ -62,6 +64,20 @@ typedef enum
     GPG_ERROR_CFLAGS,
     GPG_ERR_PUBKEY_ALGO,
     GPG_ERR_SELFTEST_FAILED,
+    GPG_ERR_SEXP_INV_LEN_SPEC,
+    GPG_ERR_SEXP_STRING_TOO_LONG,
+    GPG_ERR_SEXP_UNMATCHED_PAREN,
+    GPG_ERR_SEXP_NOT_CANONICAL,
+    GPG_ERR_SEXP_BAD_CHARACTER,
+    GPG_ERR_SEXP_BAD_QUOTATION,
+    GPG_ERR_SEXP_ZERO_PREFIX,
+    GPG_ERR_SEXP_NESTED_DH,
+    GPG_ERR_SEXP_UNMATCHED_DH,
+    GPG_ERR_SEXP_UNEXPECTED_PUNC,
+    GPG_ERR_SEXP_BAD_HEX_CHAR,
+    GPG_ERR_SEXP_ODD_HEX_NUMBERS,
+    GPG_ERR_SEXP_BAD_OCT_CHAR,
+    GPG_ERR_SYNTAX,
     GPG_ERR_TOO_SHORT,
     GPG_ERR_UNSUPPORTED,
     GPG_ERR_WEAK_KEY,
@@ -74,7 +90,11 @@ typedef enum
 typedef gpg_err_code_t gpg_error_t;
 typedef gpg_error_t gcry_error_t;
 typedef gpg_err_code_t gcry_err_code_t;
+
 #define gcry_error_t gcry_err_code_t
+
+gpg_err_code_t gpg_err_code_from_errno (int err);
+
 #if 0
 enum gcry_cipher_modes 
   {
@@ -524,8 +544,11 @@ grub_get_random (void *out, grub_size_t len);
 #define PUBKEY_FLAG_USE_X931       (1 << 6)
 #define PUBKEY_FLAG_USE_FIPS186    (1 << 7)
 #define PUBKEY_FLAG_USE_FIPS186_2  (1 << 8)
-#define PUBKEY_FLAG_ECDSA          (1 << 9)
-#define PUBKEY_FLAG_EDDSA          (1 << 10)
+#define PUBKEY_FLAG_PARAM          (1 << 9)
+#define PUBKEY_FLAG_COMP           (1 << 10)
+#define PUBKEY_FLAG_NOCOMP         (1 << 11)
+#define PUBKEY_FLAG_EDDSA          (1 << 12)
+#define PUBKEY_FLAG_GOST           (1 << 13)
 
 enum pk_operation
   {
@@ -565,7 +588,6 @@ struct pk_encoding_ctx
   void *verify_arg;
 };
 
-#endif
-
 #define gcry_mpi_get_nbits _gcry_mpi_get_nbits
 #define gcry_mpi_scan _gcry_mpi_scan
+#endif
