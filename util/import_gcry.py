@@ -540,7 +540,21 @@ for src in sorted (os.listdir (os.path.join (indir, "src"))):
         f.close ()
         fw.close ()
         continue
-
+    if src == "sexp.c":
+        fw.write ("/* This file was automatically imported with \n")
+        fw.write ("   import_gcry.py. Please don't modify it */\n")
+        fw.write ("#include <grub/dl.h>\n")
+        fw.write ("#include <string.h>\n")
+        fw.write ("#include <grub/gcrypt/g10lib.h>\n")
+        fw.write ("#include <grub/gcrypt/gpg-error.h>\n")
+        fw.write ("#include <grub/term.h>\n")
+        fw.write ("#include <grub/crypto.h>\n")
+        fw.write ("#include <grub/env.h>\n")
+        fw.write ("GRUB_MOD_LICENSE (\"GPLv3+\");\n")
+        fw.write (f.read ().replace ("#include <config.h>", "").replace("#include <stdio.h>", "").replace("#include <stdlib.h>", ""))
+        f.close ()
+        fw.close ()
+        continue
     fw.write (f.read ())
     f.close ()
     fw.close ()
