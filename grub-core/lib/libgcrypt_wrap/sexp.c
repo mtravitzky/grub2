@@ -20,6 +20,7 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA
  */
 
+#include <string.h>
 #include <grub/gcrypt/g10lib.h>
 #include <grub/gcrypt/gpg-error.h>
 #include <grub/term.h>
@@ -33,9 +34,8 @@ GRUB_MOD_LICENSE ("GPLv3+");
 #define GCRYPT_NO_MPI_MACROS 1
 #include "g10lib.h"
 
-#define memcpy grub_memcpy
-#define strchr grub_strchr
-#define strlen grub_strlen
+/* FIXME: Adding to grub-core/lib/posix_wrap/string.h */
+
 #define stpcpy grub_stpcpy
 #define errno  grub_errno
 #define atoi(p) grub_strtol(p, 0, 10)
