@@ -21,6 +21,7 @@
  */
 
 #include <string.h>
+#include <errno.h>
 #include <grub/gcrypt/g10lib.h>
 #include <grub/gcrypt/gpg-error.h>
 #include <grub/term.h>
@@ -33,13 +34,6 @@ GRUB_MOD_LICENSE ("GPLv3+");
 
 #define GCRYPT_NO_MPI_MACROS 1
 #include "g10lib.h"
-
-/* FIXME: Adding to grub-core/lib/posix_wrap/string.h */
-
-#define stpcpy grub_stpcpy
-#define errno  grub_errno
-#define atoi(p) grub_strtol(p, 0, 10)
-#define sprintf(p, fmt, ...) grub_snprintf(p, sizeof(p), fmt, ## __VA_ARGS__)
 
 typedef struct gcry_sexp *NODE;
 typedef unsigned short DATALEN;
