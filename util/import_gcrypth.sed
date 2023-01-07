@@ -13,7 +13,6 @@
 /^typedef gpg_error_t gcry_error_t;/ d
 /^typedef gpg_err_code_t gcry_err_code_t;/ d
 /^typedef struct gcry_mpi \*gcry_mpi_t;/ d
-/^struct gcry_thread_cbs/ d
 /^struct gcry_sexp;/ d
 /^typedef struct gcry_sexp \*gcry_sexp_t;/ d
 /^struct gcry_md_context;/ d
