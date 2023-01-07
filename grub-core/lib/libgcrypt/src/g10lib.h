@@ -77,6 +77,9 @@
 
 /* Gettext macros.  */
 
+#define _(a)  _gcry_gettext(a)
+#define N_(a) (a)
+
 /* Some handy macros */
 #ifndef STR
 #define STR(v) #v
@@ -262,6 +265,8 @@ char *stpcpy (char *a, const char *b);
 int strcasecmp (const char *a, const char *b) _GCRY_GCC_ATTR_PURE;
 #endif
 
+#include "../compat/libcompat.h"
+
 
 /* Macros used to rename missing functions.  */
 #ifndef HAVE_STRTOUL
@@ -353,6 +358,17 @@ void __gcry_burn_stack (unsigned int bytes);
 #define hexdigitp(a) (digitp (a)                     \
                       || (*(a) >= 'A' && *(a) <= 'F')  \
                       || (*(a) >= 'a' && *(a) <= 'f'))
+
+/* Init functions.  */
+
+gcry_err_code_t _gcry_cipher_init (void);
+gcry_err_code_t _gcry_md_init (void);
+gcry_err_code_t _gcry_pk_init (void);
+gcry_err_code_t _gcry_secmem_module_init (void);
+gcry_err_code_t _gcry_mpi_init (void);
+
+/* Memory management.  */
+#define GCRY_ALLOC_FLAG_SECURE (1 << 0)
 
 
 /*-- sexp.c --*/
