@@ -2119,8 +2119,9 @@ module = {
   common = lib/libgcrypt-grub/mpi/mpih-rshift.c;
   common = lib/libgcrypt-grub/mpi/mpi-inline.c;
   common = lib/libgcrypt-grub/src/sexp.c;
-  common = lib/libgcrypt_wrap/mem.c;
+  common = lib/libgcrypt-grub/cipher/pubkey-util.c;
   common = lib/libgcrypt_wrap/pubkey-util.c;
+  common = lib/libgcrypt_wrap/mem.c;
 
   cflags = '$(CFLAGS_GCRY) -Wno-redundant-decls -Wno-sign-compare';
   cppflags = '$(CPPFLAGS_GCRY) -I$(top_srcdir)/grub-core/lib/libgcrypt-grub/cipher/';

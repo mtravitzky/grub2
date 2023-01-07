@@ -131,6 +131,9 @@ for cipher_file in cipher_files:
             fw.write ("void camellia_decrypt192(const grub_uint32_t *subkey, grub_uint32_t *io);\n")                      
             fw.write ("void camellia_decrypt256(const grub_uint32_t *subkey, grub_uint32_t *io);\n")                      
             fw.write ("#define memcpy grub_memcpy\n")
+        elif cipher_file == "pubkey-util.c":
+            fw.write ("#include <string.h>\n")
+            fw.write ("#include <ctype.h>\n")
         # Whole libgcrypt is distributed under GPLv3+ or compatible
         if isc:
             fw.write ("GRUB_MOD_LICENSE (\"GPLv3+\");\n")
@@ -209,7 +212,7 @@ for cipher_file in cipher_files:
                 hold = False
                 # We're optimising for size and exclude anything needing good
                 # randomness.
-                if not re.match ("(run_selftests|selftest|_gcry_aes_c.._..c|_gcry_[a-z0-9]*_hash_buffer|tripledes_set2keys|do_tripledes_set_extra_info|_gcry_rmd160_mixblock|serpent_test|dsa_generate_ext|test_keys|gen_k|sign|gen_x931_parm_xp|generate_x931|generate_key|dsa_generate|dsa_sign|ecc_sign|generate|generate_fips186|_gcry_register_pk_dsa_progress|_gcry_register_pk_ecc_progress|progress|scanval|ec2os|ecc_generate_ext|ecc_generate|compute_keygrip|ecc_get_param|_gcry_register_pk_dsa_progress|gen_x931_parm_xp|gen_x931_parm_xi|rsa_decrypt|rsa_sign|rsa_generate_ext|rsa_generate|secret|check_exponent|rsa_blind|rsa_unblind|extract_a_from_sexp|curve_free|curve_copy|point_set|_gcry_hash_selftest_check_one|rsa_encrypt|rsa_check_secret_key|dsa_(verify|get_nbits|check_secret_key))", line) is None:
+                if not re.match ("(run_selftests|selftest|_gcry_aes_c.._..c|_gcry_[a-z0-9]*_hash_buffer|tripledes_set2keys|do_tripledes_set_extra_info|_gcry_rmd160_mixblock|serpent_test|dsa_generate_ext|test_keys|gen_k|sign|gen_x931_parm_xp|generate_x931|generate_key|dsa_generate|dsa_sign|ecc_sign|generate|generate_fips186|_gcry_register_pk_dsa_progress|_gcry_register_pk_ecc_progress|progress|scanval|ec2os|ecc_generate_ext|ecc_generate|compute_keygrip|ecc_get_param|_gcry_register_pk_dsa_progress|gen_x931_parm_xp|gen_x931_parm_xi|rsa_decrypt|rsa_sign|rsa_generate_ext|rsa_generate|secret|check_exponent|rsa_blind|rsa_unblind|extract_a_from_sexp|curve_free|curve_copy|point_set|_gcry_hash_selftest_check_one|rsa_encrypt|rsa_check_secret_key|dsa_(verify|get_nbits|check_secret_key)|_gcry_pk_util_data_to_mpi|pss_verify_cmp|get_hash_algo|_gcry_pk_util_get_nbits|_gcry_pk_util_get_rsa_use_e|_gcry_pk_util_preparse_encval)", line) is None:
 
                     skip = 1
                     if not re.match ("selftest", line) is None and cipher_file == "idea.c":
@@ -239,12 +242,12 @@ for cipher_file in cipher_files:
                         fw.write ("#define compute_keygrip 0");
                     if not re.match ("do_tripledes_set_extra_info", line) is None:
                         fw.write ("#define do_tripledes_set_extra_info 0");
-		    m = re.match ("dsa_(verify|check_secret_key|get_nbits)", line)
-		    if not m is None:
-			fw.write ("#define %s 0" % m.group ())
-		    m = re.match ("rsa_(check_secret_key|get_nbits)", line)
-		    if not m is None:
-			fw.write ("#define %s 0" % m.group ())
+                    m = re.match ("dsa_(verify|check_secret_key|get_nbits)", line)
+                    if not m is None:
+                        fw.write ("#define %s 0" % m.group ())
+                    m = re.match ("rsa_(check_secret_key|get_nbits)", line)
+                    if not m is None:
+                        fw.write ("#define %s 0" % m.group ())
                     fname = re.match ("[a-zA-Z0-9_]*", line).group ()
                     chmsg = "(%s): Removed." % fname
                     if nch:
@@ -356,17 +359,17 @@ for cipher_file in cipher_files:
                     nch = True
                 continue
 
-            m = re.match ("(static const char( |)\*|static gpg_err_code_t|void|static (unsigned |)int|static gcry_err_code_t|static gcry_mpi_t|static void|void|static elliptic_curve_t) *$", line)
+            m = re.match ("(static const char( |)\*|static gpg_err_code_t|gpg_err_code_t|void|static (unsigned |)int|static gcry_err_code_t|gcry_err_code_t|static gcry_mpi_t|static void|void|static elliptic_curve_t) *$", line)
             if not m is None:
                 hold = True
                 holdline = line
                 continue
-	    if cipher_file == "hash-common.c":
-		m = re.match ("const char", line);
-		if not m is None:
-		    hold = True
-		    holdline = line
-		    continue
+            if cipher_file == "hash-common.c":
+                m = re.match ("const char", line);
+                if not m is None:
+                    hold = True
+                    holdline = line
+                    continue
             m = re.match ("static int tripledes_set2keys \(.*\);", line)
             if not m is None:
                 continue
@@ -492,6 +495,8 @@ for cipher_file in cipher_files:
             fw.close ()
             if nch:
                 chlog = "%s%s\n" % (chlog, chlognew)
+        elif cipher_file == "pubkey-util.c":
+            continue
         elif isc and cipher_file != "camellia.c":
             print ("WARNING: C file isn't a module: %s" % cipher_file)
             f.close ()
