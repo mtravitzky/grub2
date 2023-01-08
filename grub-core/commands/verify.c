@@ -597,8 +597,12 @@ grub_verify_signature_real (char *buf, grub_size_t size,
     if (!*pkalgos[pk].algo)
       return grub_error (GRUB_ERR_BAD_SIGNATURE, N_("module `%s' isn't loaded"), pkalgos[pk].module);
     /* TODO: check last two arguments in new api are necessary */
+    /* FIXME: libgcrypt 1.6.0 has restructured all this stuff can't work any longer */
+    /*
     if ((*pkalgos[pk].algo)->verify (0, hmpi, mpis, sk->mpis, 0, 0, 0, 0))
       return grub_error (GRUB_ERR_BAD_SIGNATURE, N_("bad signature"));
+    */
+    return grub_error (GRUB_ERR_BAD_SIGNATURE, N_("bad signature"));
   }
 
   return GRUB_ERR_NONE;

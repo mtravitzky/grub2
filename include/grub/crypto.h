@@ -221,61 +221,49 @@ typedef struct gcry_cipher_spec
   struct gcry_cipher_spec *next;
 } gcry_cipher_spec_t;
 
+/*
+ *
+ * Public key related definitions.
+ *
+ */
+
 /* Type for the pk_generate function.  */
-typedef gcry_err_code_t (*gcry_pk_generate_t) (int algo,
-					       unsigned int nbits,
-					       unsigned long use_e,
-					       gcry_mpi_t *skey,
-					       gcry_mpi_t **retfactors);
+typedef gcry_err_code_t (*gcry_pk_generate_t) (gcry_sexp_t genparms,
+                                               gcry_sexp_t *r_skey);
 
 /* Type for the pk_check_secret_key function.  */
-typedef gcry_err_code_t (*gcry_pk_check_secret_key_t) (int algo,
-						       gcry_mpi_t *skey);
+typedef gcry_err_code_t (*gcry_pk_check_secret_key_t) (gcry_sexp_t keyparms);
 
 /* Type for the pk_encrypt function.  */
-typedef gcry_err_code_t (*gcry_pk_encrypt_t) (int algo,
-					      gcry_mpi_t *resarr,
-					      gcry_mpi_t data,
-					      gcry_mpi_t *pkey,
-					      int flags);
+typedef gcry_err_code_t (*gcry_pk_encrypt_t) (gcry_sexp_t *r_ciph,
+                                              gcry_sexp_t s_data,
+                                              gcry_sexp_t keyparms);
 
 /* Type for the pk_decrypt function.  */
-typedef gcry_err_code_t (*gcry_pk_decrypt_t) (int algo,
-					      gcry_mpi_t *result,
-					      gcry_mpi_t *data,
-					      gcry_mpi_t *skey,
-					      int flags);
+typedef gcry_err_code_t (*gcry_pk_decrypt_t) (gcry_sexp_t *r_plain,
+                                              gcry_sexp_t s_data,
+                                              gcry_sexp_t keyparms);
 
 /* Type for the pk_sign function.  */
-typedef gcry_err_code_t (*gcry_pk_sign_t) (int algo,
-					   gcry_mpi_t *resarr,
-					   gcry_mpi_t data,
-					   gcry_mpi_t *skey);
+typedef gcry_err_code_t (*gcry_pk_sign_t) (gcry_sexp_t *r_sig,
+                                           gcry_sexp_t s_data,
+                                           gcry_sexp_t keyparms);
 
 /* Type for the pk_verify function.  */
-typedef gcry_err_code_t (*gcry_pk_verify_t) (int algo,
-					     gcry_mpi_t hash,
-					     gcry_mpi_t *data,
-					     gcry_mpi_t *pkey,
-					     int (*cmp) (void *, gcry_mpi_t),
-					     void *opaquev,
-                                             int flags,
-                                             int hashalgo);
+typedef gcry_err_code_t (*gcry_pk_verify_t) (gcry_sexp_t s_sig,
+                                             gcry_sexp_t s_data,
+                                             gcry_sexp_t keyparms);
 
 /* Type for the pk_get_nbits function.  */
-typedef unsigned (*gcry_pk_get_nbits_t) (int algo, gcry_mpi_t *pkey);
+typedef unsigned (*gcry_pk_get_nbits_t) (gcry_sexp_t keyparms);
 
 
 /* The type used to compute the keygrip.  */
 typedef gpg_err_code_t (*pk_comp_keygrip_t) (gcry_md_hd_t md,
                                              gcry_sexp_t keyparm);
 
-/* The type used to query ECC curve parameters.  */
-typedef gcry_err_code_t (*pk_get_param_t) (const char *name,
-                                           gcry_mpi_t *pkey);
-
 /* The type used to query an ECC curve name.  */
-typedef const char *(*pk_get_curve_t)(gcry_mpi_t *pkey, int iterator,
+typedef const char *(*pk_get_curve_t)(gcry_sexp_t keyparms, int iterator,
                                       unsigned int *r_nbits);
 
 /* The type used to query ECC curve parameters by name.  */
@@ -306,7 +294,6 @@ typedef struct gcry_pk_spec
   gcry_pk_get_nbits_t get_nbits;
   selftest_func_t selftest;
   pk_comp_keygrip_t comp_keygrip;
-  pk_get_param_t get_param;
   pk_get_curve_t get_curve;
   pk_get_curve_param_t get_curve_param;
 #ifdef GRUB_UTIL
