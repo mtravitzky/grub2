@@ -93,8 +93,6 @@ typedef gpg_err_code_t gcry_err_code_t;
 
 #define gcry_error_t gcry_err_code_t
 
-gpg_err_code_t gpg_err_code_from_errno (int err);
-
 #if 0
 enum gcry_cipher_modes 
   {

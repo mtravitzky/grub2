@@ -159,6 +159,32 @@ gpg_err_code_from_syserror (void)
 gpg_err_code_t
 gpg_err_code_from_errno (int err)
 {
+  /* Currently not used.  */
+  (void) err;
   return GPG_ERR_GENERAL;
 }
 
+const char *
+gpg_strerror (gpg_error_t err)
+{
+  /* Currently not used.  */
+  (void) err;
+  return "gpg error function is not implemented";
+}
+
+const char *
+gpg_strsource (gpg_error_t err)
+{
+  /* Currently not used.  */
+  (void) err;
+  return "gpg error function is not implemented";
+}
+
+gpg_err_code_t
+gpg_err_make_from_errno (gpg_err_source_t source, int err)
+{
+  /* Currently not used.  */
+  (void) source;
+  (void) err;
+  return GPG_ERR_GENERAL;
+}

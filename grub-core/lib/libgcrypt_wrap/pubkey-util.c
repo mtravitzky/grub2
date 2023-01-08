@@ -17,6 +17,10 @@ _gcry_pk_util_data_to_mpi (gcry_sexp_t input, gcry_mpi_t *ret_mpi,
   int unknown_flag = 0;
   int parsed_flags = 0;
 
+  /* unused */
+  (void) n;
+  (void) s;
+
   *ret_mpi = NULL;
   ldata = sexp_find_token (input, "data", 0);
   if (!ldata)

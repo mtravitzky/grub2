@@ -36,5 +36,18 @@ gcry_err_code_t
 gpg_error_from_syserror (void);
 
 gcry_err_code_t
-gpg_error_code_from_syserror (void);
+gpg_err_code_from_syserror (void);
+
+gpg_err_code_t
+gpg_err_code_from_errno (int err);
+
+const char *
+gpg_strerror (gcry_error_t err);
+
+const char *
+gpg_strsource (gcry_error_t err);
+
+gpg_err_code_t
+gpg_err_make_from_errno (gpg_err_source_t source, int err);
+
 #endif

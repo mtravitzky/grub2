@@ -23,7 +23,8 @@ if [ -d grub-core/lib/libgcrypt-grub/mpi/generic ]; then
     rm -rf grub-core/lib/libgcrypt-grub/mpi/generic
 fi
 ln -srf grub-core/lib/libgcrypt-grub/src/g10lib.h include/grub/gcrypt/g10lib.h
-sed -i -e '/#include\s.*compat\/libcompat\.h/d' grub-core/lib/libgcrypt-grub/src/g10lib.h
+sed -i -e '/#include\s.*compat\/libcompat\.h/d;
+/#define\sN\?_(a)\s/d' grub-core/lib/libgcrypt-grub/src/g10lib.h
 cp -R grub-core/lib/libgcrypt/mpi/generic grub-core/lib/libgcrypt-grub/mpi/generic
 
 for x in mpi-asm-defs.h mpih-add1.c mpih-sub1.c mpih-mul1.c mpih-mul2.c mpih-mul3.c mpih-lshift.c mpih-rshift.c; do
