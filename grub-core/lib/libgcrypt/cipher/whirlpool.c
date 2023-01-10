@@ -14,20 +14,19 @@
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA
- *
+ * License along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
 
 /* This is an implementation of the Whirlpool hashing algorithm, which
    has been developed by Vincent Rijmen and Paulo S. L. M. Barreto;
    it's homepage is located at:
-   http://planeta.terra.com.br/informatica/paulobarreto/WhirlpoolPage.html.
+   http://www.larc.usp.br/~pbarreto/WhirlpoolPage.html
 
    The S-Boxes and the structure of the main transformation function,
    which implements an optimized version of the algorithm, is taken
    from the reference implementation available from
-   http://planeta.terra.com.br/informatica/paulobarreto/whirlpool.zip.  */
+   http://www.larc.usp.br/~pbarreto/whirlpool.zip
+ */
 
 #include <config.h>
 #include <stdio.h>
@@ -38,7 +37,8 @@
 #include "g10lib.h"
 #include "cipher.h"
 
-#include "bithelp.h"
+#include "bufhelp.h"
+#include "hash-common.h"
 
 /* Size of a whirlpool block (in bytes).  */
 #define BLOCK_SIZE 64
@@ -52,10 +52,8 @@
 typedef u64 whirlpool_block_t[BLOCK_SIZE / 8];
 
 typedef struct {
+  gcry_md_block_ctx_t bctx;
   whirlpool_block_t hash_state;
-  unsigned char buffer[BLOCK_SIZE];
-  size_t count;
-  unsigned char length[32];
 } whirlpool_context_t;
 
 
@@ -66,30 +64,13 @@ typedef struct {
    counter.  */
 #define buffer_to_block(buffer, block, i) \
   for (i = 0; i < 8; i++) \
-    (block)[i] = ((u64) (0 \
-                         | (((u64) (buffer)[i * 8 + 0]) << 56) \
-                         | (((u64) (buffer)[i * 8 + 1]) << 48) \
-                         | (((u64) (buffer)[i * 8 + 2]) << 40) \
-                         | (((u64) (buffer)[i * 8 + 3]) << 32) \
-                         | (((u64) (buffer)[i * 8 + 4]) << 24) \
-                         | (((u64) (buffer)[i * 8 + 5]) << 16) \
-                         | (((u64) (buffer)[i * 8 + 6]) <<  8) \
-                         | (((u64) (buffer)[i * 8 + 7]) <<  0)));
+    (block)[i] = buf_get_be64((buffer) + i * 8);
 
 /* Convert the block BLOCK into a buffer BUFFER, using I as
    counter.  */
 #define block_to_buffer(buffer, block, i) \
   for (i = 0; i < 8; i++) \
-    { \
-      (buffer)[i * 8 + 0] = (block[i] >> 56) & 0xFF; \
-      (buffer)[i * 8 + 1] = (block[i] >> 48) & 0xFF; \
-      (buffer)[i * 8 + 2] = (block[i] >> 40) & 0xFF; \
-      (buffer)[i * 8 + 3] = (block[i] >> 32) & 0xFF; \
-      (buffer)[i * 8 + 4] = (block[i] >> 24) & 0xFF; \
-      (buffer)[i * 8 + 5] = (block[i] >> 16) & 0xFF; \
-      (buffer)[i * 8 + 6] = (block[i] >>  8) & 0xFF; \
-      (buffer)[i * 8 + 7] = (block[i] >>  0) & 0xFF; \
-    }
+    buf_put_be64((buffer) + i * 8, (block)[i]);
 
 /* Copy the block BLOCK_SRC to BLOCK_DST, using I as counter.  */
 #define block_copy(block_dst, block_src, i) \
@@ -1179,21 +1160,30 @@ static const u64 C7[256] =
 
 
 
+static unsigned int
+whirlpool_transform (void *ctx, const unsigned char *data);
+
+
+
 static void
 whirlpool_init (void *ctx)
 {
   whirlpool_context_t *context = ctx;
 
   memset (context, 0, sizeof (*context));
+
+  context->bctx.blocksize = BLOCK_SIZE;
+  context->bctx.bwrite = whirlpool_transform;
 }
 
 
 /*
  * Transform block.
  */
-static void
-whirlpool_transform (whirlpool_context_t *context, const unsigned char *data)
+static unsigned int
+whirlpool_transform (void *ctx, const unsigned char *data)
 {
+  whirlpool_context_t *context = ctx;
   whirlpool_block_t data_block;
   whirlpool_block_t key;
   whirlpool_block_t state;
@@ -1285,78 +1275,20 @@ whirlpool_transform (whirlpool_context_t *context, const unsigned char *data)
 
   block_xor (context->hash_state, data_block, i);
   block_xor (context->hash_state, state, i);
-}
 
-static void
-whirlpool_add (whirlpool_context_t *context,
-	       const void *buffer_arg, size_t buffer_n)
-{
-  const unsigned char *buffer = buffer_arg;
-  u64 buffer_size;
-  unsigned int carry;
-  unsigned int i;
-
-  buffer_size = buffer_n;
-
-  if (context->count == BLOCK_SIZE)
-    {
-      /* Flush the buffer.  */
-      whirlpool_transform (context, context->buffer);
-      /*_gcry_burn_stack (80+6*sizeof(void*));*/ /* FIXME */
-      context->count = 0;
-    }
-  if (! buffer)
-    return; /* Nothing to add.  */
-
-  if (context->count)
-    {
-      while (buffer_n && (context->count < BLOCK_SIZE))
-	{
-	  context->buffer[context->count++] = *buffer++;
-	  buffer_n--;
-	}
-      whirlpool_add (context, NULL, 0);
-      if (!buffer_n)
-	/* Done.  */
-        return;
-    }
-  /*_gcry_burn_stack (80+6*sizeof(void*));*/ /* FIXME */
-
-  while (buffer_n >= BLOCK_SIZE)
-    {
-      whirlpool_transform (context, buffer);
-      context->count = 0;
-      buffer_n -= BLOCK_SIZE;
-      buffer += BLOCK_SIZE;
-    }
-  while (buffer_n && (context->count < BLOCK_SIZE))
-    {
-      context->buffer[context->count++] = *buffer++;
-      buffer_n--;
-    }
-
-  /* Update bit counter.  */
-  carry = 0;
-  buffer_size <<= 3;
-  for (i = 1; i <= 32; i++)
-    {
-      if (! (buffer_size || carry))
-	break;
-
-      carry += context->length[32 - i] + (buffer_size & 0xFF);
-      context->length[32 - i] = carry;
-      buffer_size >>= 8;
-      carry >>= 8;
-    }
-  gcry_assert (! (buffer_size || carry));
+  return /*burn_stack*/ 4 * sizeof(whirlpool_block_t) + 2 * sizeof(int) +
+                        4 * sizeof(void*);
 }
 
 static void
 whirlpool_write (void *ctx, const void *buffer, size_t buffer_n)
 {
   whirlpool_context_t *context = ctx;
+  u64 old_nblocks = context->bctx.nblocks;
 
-  whirlpool_add (context, buffer, buffer_n);
+  _gcry_md_block_write (context, buffer, buffer_n);
+
+  gcry_assert (old_nblocks <= context->bctx.nblocks);
 }
 
 static void
@@ -1364,29 +1296,54 @@ whirlpool_final (void *ctx)
 {
   whirlpool_context_t *context = ctx;
   unsigned int i;
+  u64 t, th, lsb, msb;
+  unsigned char *length;
+
+  t = context->bctx.nblocks;
+  /* if (sizeof t == sizeof context->bctx.nblocks) */
+  th = context->bctx.nblocks_high;
+  /* else */
+  /*   th = context->bctx.nblocks >> 64; In case we ever use u128 */
+
+  /* multiply by 64 to make a byte count */
+  lsb = t << 6;
+  msb = (th << 6) | (t >> 58);
+  /* add the count */
+  t = lsb;
+  if ((lsb += context->bctx.count) < t)
+    msb++;
+  /* multiply by 8 to make a bit count */
+  t = lsb;
+  lsb <<= 3;
+  msb <<= 3;
+  msb |= t >> 61;
 
   /* Flush.  */
-  whirlpool_add (context, NULL, 0);
+  whirlpool_write (context, NULL, 0);
 
   /* Pad.  */
-  context->buffer[context->count++] = 0x80;
+  context->bctx.buf[context->bctx.count++] = 0x80;
 
-  if (context->count > 32)
+  if (context->bctx.count > 32)
     {
       /* An extra block is necessary.  */
-      while (context->count < 64)
-	context->buffer[context->count++] = 0;
-      whirlpool_add (context, NULL, 0);
+      while (context->bctx.count < 64)
+	context->bctx.buf[context->bctx.count++] = 0;
+      whirlpool_write (context, NULL, 0);
     }
-  while (context->count < 32)
-    context->buffer[context->count++] = 0;
+  while (context->bctx.count < 32)
+    context->bctx.buf[context->bctx.count++] = 0;
 
   /* Add length of message.  */
-  memcpy (context->buffer + context->count, context->length, 32);
-  context->count += 32;
-  whirlpool_add (context, NULL, 0);
+  length = context->bctx.buf + context->bctx.count;
+  buf_put_be64(&length[0 * 8], 0);
+  buf_put_be64(&length[1 * 8], 0);
+  buf_put_be64(&length[2 * 8], msb);
+  buf_put_be64(&length[3 * 8], lsb);
+  context->bctx.count += 32;
+  whirlpool_write (context, NULL, 0);
 
-  block_to_buffer (context->buffer, context->hash_state, i);
+  block_to_buffer (context->bctx.buf, context->hash_state, i);
 }
 
 static byte *
@@ -1394,11 +1351,12 @@ whirlpool_read (void *ctx)
 {
   whirlpool_context_t *context = ctx;
 
-  return context->buffer;
+  return context->bctx.buf;
 }
 
 gcry_md_spec_t _gcry_digest_spec_whirlpool =
   {
+    GCRY_MD_WHIRLPOOL, {0, 0},
     "WHIRLPOOL", NULL, 0, NULL, 64,
     whirlpool_init, whirlpool_write, whirlpool_final, whirlpool_read,
     sizeof (whirlpool_context_t)

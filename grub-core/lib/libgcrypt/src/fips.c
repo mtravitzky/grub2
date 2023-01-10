@@ -36,7 +36,7 @@
 #include "hmac256.h"
 
 
-/* The name of the file used to foce libgcrypt into fips mode. */
+/* The name of the file used to force libgcrypt into fips mode. */
 #define FIPS_FORCE_FILE "/etc/gcrypt/fips_enabled"
 
 
@@ -69,7 +69,7 @@ static int enforced_fips_mode;
 static int inactive_fips_mode;
 
 /* This is the lock we use to protect the FSM.  */
-static ath_mutex_t fsm_lock = ATH_MUTEX_INITIALIZER;
+static ath_mutex_t fsm_lock;
 
 /* The current state of the FSM.  The whole state machinery is only
    used while in fips mode. Change this only while holding fsm_lock. */
@@ -546,7 +546,7 @@ run_pubkey_selftests (int extended)
     {
       GCRY_PK_RSA,
       GCRY_PK_DSA,
-      /* GCRY_PK_ECDSA is not enabled in fips mode.  */
+      /* GCRY_PK_ECC is not enabled in fips mode.  */
       0
     };
   int idx;
@@ -660,7 +660,7 @@ check_binary_integrity (void)
             "integrity check using `%s' failed: %s",
             fname? fname:"[?]", gpg_strerror (err));
 #endif /*HAVE_SYSLOG*/
-  gcry_free (fname);
+  xfree (fname);
   return !!err;
 #else
   return 0;

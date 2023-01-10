@@ -118,6 +118,7 @@
 #include "types.h"             /* for byte and u32 typedefs */
 #include "g10lib.h"
 #include "cipher.h"
+#include "bufhelp.h"
 
 #if defined(__GNUC__) && defined(__GNU_LIBRARY__)
 #define working_memcmp memcmp
@@ -455,14 +456,12 @@ static unsigned char weak_keys_chksum[20] = {
  * Macros to convert 8 bytes from/to 32bit words.
  */
 #define READ_64BIT_DATA(data, left, right)				   \
-    left  = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];  \
-    right = (data[4] << 24) | (data[5] << 16) | (data[6] << 8) | data[7];
+    left = buf_get_be32(data + 0);					   \
+    right = buf_get_be32(data + 4);
 
 #define WRITE_64BIT_DATA(data, left, right)				   \
-    data[0] = (left >> 24) &0xff; data[1] = (left >> 16) &0xff; 	   \
-    data[2] = (left >> 8) &0xff; data[3] = left &0xff;			   \
-    data[4] = (right >> 24) &0xff; data[5] = (right >> 16) &0xff;	   \
-    data[6] = (right >> 8) &0xff; data[7] = right &0xff;
+    buf_put_be32(data + 0, left);					   \
+    buf_put_be32(data + 4, right);
 
 /*
  * Handy macros for encryption and decryption of data
@@ -894,7 +893,8 @@ selftest (void)
    * thanks to Jeroen C. van Gelderen.
    */
   {
-    struct { byte key[24]; byte plain[8]; byte cipher[8]; } testdata[] = {
+    static const struct { byte key[24]; byte plain[8]; byte cipher[8]; }
+      testdata[] = {
       { { 0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,
           0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,
           0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01  },
@@ -1054,21 +1054,21 @@ do_tripledes_set_extra_info (void *context, int what,
 }
 
 
-static void
+static unsigned int
 do_tripledes_encrypt( void *context, byte *outbuf, const byte *inbuf )
 {
   struct _tripledes_ctx *ctx = (struct _tripledes_ctx *) context;
 
   tripledes_ecb_encrypt ( ctx, inbuf, outbuf );
-  _gcry_burn_stack (32);
+  return /*burn_stack*/ (32);
 }
 
-static void
+static unsigned int
 do_tripledes_decrypt( void *context, byte *outbuf, const byte *inbuf )
 {
   struct _tripledes_ctx *ctx = (struct _tripledes_ctx *) context;
   tripledes_ecb_decrypt ( ctx, inbuf, outbuf );
-  _gcry_burn_stack (32);
+  return /*burn_stack*/ (32);
 }
 
 static gcry_err_code_t
@@ -1091,22 +1091,22 @@ do_des_setkey (void *context, const byte *key, unsigned keylen)
 }
 
 
-static void
+static unsigned int
 do_des_encrypt( void *context, byte *outbuf, const byte *inbuf )
 {
   struct _des_ctx *ctx = (struct _des_ctx *) context;
 
   des_ecb_encrypt ( ctx, inbuf, outbuf );
-  _gcry_burn_stack (32);
+  return /*burn_stack*/ (32);
 }
 
-static void
+static unsigned int
 do_des_decrypt( void *context, byte *outbuf, const byte *inbuf )
 {
   struct _des_ctx *ctx = (struct _des_ctx *) context;
 
   des_ecb_decrypt ( ctx, inbuf, outbuf );
-  _gcry_burn_stack (32);
+  return /*burn_stack*/ (32);
 }
 
 
@@ -1169,6 +1169,7 @@ run_selftests (int algo, int extended, selftest_report_func_t report)
 
 gcry_cipher_spec_t _gcry_cipher_spec_des =
   {
+    GCRY_CIPHER_DES, {0, 0},
     "DES", NULL, NULL, 8, 64, sizeof (struct _des_ctx),
     do_des_setkey, do_des_encrypt, do_des_decrypt
   };
@@ -1185,12 +1186,10 @@ static gcry_cipher_oid_spec_t oids_tripledes[] =
 
 gcry_cipher_spec_t _gcry_cipher_spec_tripledes =
   {
+    GCRY_CIPHER_3DES, {0, 1},
     "3DES", NULL, oids_tripledes, 8, 192, sizeof (struct _tripledes_ctx),
-    do_tripledes_setkey, do_tripledes_encrypt, do_tripledes_decrypt
-  };
-
-cipher_extra_spec_t _gcry_cipher_extraspec_tripledes =
-  {
+    do_tripledes_setkey, do_tripledes_encrypt, do_tripledes_decrypt,
+    NULL, NULL,
     run_selftests,
     do_tripledes_set_extra_info
   };

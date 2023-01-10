@@ -26,10 +26,10 @@ EXTRA_DIST = Manifest libgcrypt-config.in libgcrypt.m4 libgcrypt.vers \
 bin_SCRIPTS = libgcrypt-config
 m4datadir = $(datadir)/aclocal
 m4data_DATA = libgcrypt.m4
-include_HEADERS = gcrypt.h gcrypt-module.h
+include_HEADERS = gcrypt.h
 
 lib_LTLIBRARIES = libgcrypt.la
-bin_PROGRAMS = dumpsexp hmac256
+bin_PROGRAMS = dumpsexp hmac256 mpicalc
 if USE_RANDOM_DAEMON
 sbin_PROGRAMS = gcryptrnd
 bin_PROGRAMS += getrandom
@@ -44,6 +44,8 @@ arch_gpg_error_cflags =
 arch_gpg_error_libs   =
 endif
 
+AM_CFLAGS = $(GPG_ERROR_CFLAGS)
+AM_CCASFLAGS = $(NOEXECSTACK_FLAGS)
 
 if HAVE_LD_VERSION_SCRIPT
   libgcrypt_version_script_cmd = -Wl,--version-script=$(srcdir)/libgcrypt.vers
@@ -52,13 +54,19 @@ else
 endif
 
 libgcrypt_la_CFLAGS = $(GPG_ERROR_CFLAGS)
-libgcrypt_la_SOURCES = g10lib.h visibility.c visibility.h types.h \
+libgcrypt_la_SOURCES = \
+        gcrypt-int.h g10lib.h visibility.c visibility.h types.h \
 	cipher.h cipher-proto.h \
-	misc.c global.c sexp.c hwfeatures.c \
+	misc.c global.c sexp.c hwfeatures.c hwf-common.h \
 	stdmem.c stdmem.h secmem.c secmem.h \
-	mpi.h missing-string.c module.c fips.c \
-	hmac256.c hmac256.h \
+	mpi.h missing-string.c fips.c \
+	hmac256.c hmac256.h context.c context.h \
+	ec-context.h \
 	ath.h ath.c
+
+EXTRA_libgcrypt_la_SOURCES = hwf-x86.c hwf-arm.c
+gcrypt_hwf_modules = @GCRYPT_HWF_MODULES@
+
 
 if HAVE_W32_SYSTEM
 
@@ -76,6 +84,7 @@ no_undefined = -no-undefined
 export_symbols = -export-symbols $(srcdir)/libgcrypt.def
 
 install-def-file:
+	-$(INSTALL) -d $(DESTDIR)$(libdir)
 	$(INSTALL) $(srcdir)/libgcrypt.def $(DESTDIR)$(libdir)/libgcrypt.def
 
 uninstall-def-file:
@@ -101,12 +110,14 @@ libgcrypt_la_LDFLAGS = $(no_undefined) $(export_symbols) \
 	$(libgcrypt_version_script_cmd) -version-info \
 	@LIBGCRYPT_LT_CURRENT@:@LIBGCRYPT_LT_REVISION@:@LIBGCRYPT_LT_AGE@
 libgcrypt_la_DEPENDENCIES = \
+         $(gcrypt_hwf_modules) \
 	../cipher/libcipher.la \
 	../random/librandom.la \
 	../mpi/libmpi.la \
 	../compat/libcompat.la \
 	$(srcdir)/libgcrypt.vers $(gcrypt_deps)
 libgcrypt_la_LIBADD = $(gcrypt_res) \
+        $(gcrypt_hwf_modules) \
 	../cipher/libcipher.la \
 	../random/librandom.la \
 	../mpi/libmpi.la \
@@ -116,6 +127,10 @@ libgcrypt_la_LIBADD = $(gcrypt_res) \
 dumpsexp_SOURCES = dumpsexp.c
 dumpsexp_CFLAGS = $(arch_gpg_error_cflags)
 dumpsexp_LDADD = $(arch_gpg_error_libs)
+
+mpicalc_SOURCES = mpicalc.c
+mpicalc_CFLAGS = $(GPG_ERROR_CFLAGS)
+mpicalc_LDADD = libgcrypt.la $(GPG_ERROR_LIBS)
 
 hmac256_SOURCES = hmac256.c
 hmac256_CFLAGS = -DSTANDALONE $(arch_gpg_error_cflags)

@@ -66,8 +66,19 @@
 #define GCC_ATTR_FORMAT_ARG(a)
 #endif
 
+/* I am not sure since when the unused attribute is really supported.
+   In any case it it only needed for gcc versions which print a
+   warning.  Thus let us require gcc >= 3.5.  */
+#if __GNUC__ > 3 || (__GNUC__ == 3 && __GNUC_MINOR__ >= 5 )
+#define GCC_ATTR_UNUSED  __attribute__ ((unused))
+#else
+#define GCC_ATTR_UNUSED
+#endif
 
 /* Gettext macros.  */
+
+#define _(a)  _gcry_gettext(a)
+#define N_(a) (a)
 
 /* Some handy macros */
 #ifndef STR
@@ -85,6 +96,36 @@ gcry_error_t _gcry_vcontrol (enum gcry_ctl_cmds cmd, va_list arg_ptr);
 void  _gcry_check_heap (const void *a);
 int _gcry_get_debug_flag (unsigned int mask);
 
+/* Malloc functions and common wrapper macros.  */
+void *_gcry_malloc (size_t n) _GCRY_GCC_ATTR_MALLOC;
+void *_gcry_calloc (size_t n, size_t m) _GCRY_GCC_ATTR_MALLOC;
+void *_gcry_malloc_secure (size_t n) _GCRY_GCC_ATTR_MALLOC;
+void *_gcry_calloc_secure (size_t n, size_t m) _GCRY_GCC_ATTR_MALLOC;
+void *_gcry_realloc (void *a, size_t n);
+char *_gcry_strdup (const char *string) _GCRY_GCC_ATTR_MALLOC;
+void *_gcry_xmalloc (size_t n) _GCRY_GCC_ATTR_MALLOC;
+void *_gcry_xcalloc (size_t n, size_t m) _GCRY_GCC_ATTR_MALLOC;
+void *_gcry_xmalloc_secure (size_t n) _GCRY_GCC_ATTR_MALLOC;
+void *_gcry_xcalloc_secure (size_t n, size_t m) _GCRY_GCC_ATTR_MALLOC;
+void *_gcry_xrealloc (void *a, size_t n);
+char *_gcry_xstrdup (const char * a) _GCRY_GCC_ATTR_MALLOC;
+void  _gcry_free (void *a);
+int   _gcry_is_secure (const void *a) _GCRY_GCC_ATTR_PURE;
+
+#define xtrymalloc(a)    _gcry_malloc ((a))
+#define xtrycalloc(a,b)  _gcry_calloc ((a),(b))
+#define xtrymalloc_secure(a)   _gcry_malloc_secure ((a))
+#define xtrycalloc_secure(a,b) _gcry_calloc_secure ((a),(b))
+#define xtryrealloc(a,b) _gcry_realloc ((a),(b))
+#define xtrystrdup(a)    _gcry_strdup ((a))
+#define xmalloc(a)       _gcry_xmalloc ((a))
+#define xcalloc(a,b)     _gcry_xcalloc ((a),(b))
+#define xmalloc_secure(a)   _gcry_xmalloc_secure ((a))
+#define xcalloc_secure(a,b) _gcry_xcalloc_secure ((a),(b))
+#define xrealloc(a,b)    _gcry_xrealloc ((a),(b))
+#define xstrdup(a)       _gcry_xstrdup ((a))
+#define xfree(a)         _gcry_free ((a))
+
 
 /*-- src/misc.c --*/
 
@@ -98,8 +139,12 @@ void _gcry_bug (const char *file, int line);
 void _gcry_assert_failed (const char *expr, const char *file, int line);
 #endif
 
+void _gcry_divide_by_zero (void) JNLIB_GCC_A_NR;
+
 const char *_gcry_gettext (const char *key) GCC_ATTR_FORMAT_ARG(1);
 void _gcry_fatal_error(int rc, const char *text ) JNLIB_GCC_A_NR;
+void _gcry_logv (int level,
+                 const char *fmt, va_list arg_ptr) JNLIB_GCC_A_PRINTF(2,0);
 void _gcry_log( int level, const char *fmt, ... ) JNLIB_GCC_A_PRINTF(2,3);
 void _gcry_log_bug( const char *fmt, ... )   JNLIB_GCC_A_NR_PRINTF(1,2);
 void _gcry_log_fatal( const char *fmt, ... ) JNLIB_GCC_A_NR_PRINTF(1,2);
@@ -110,6 +155,8 @@ int  _gcry_log_info_with_dummy_fp (FILE *fp, const char *fmt, ... )
 void _gcry_log_debug( const char *fmt, ... ) JNLIB_GCC_A_PRINTF(1,2);
 void _gcry_log_printf ( const char *fmt, ... ) JNLIB_GCC_A_PRINTF(1,2);
 void _gcry_log_printhex (const char *text, const void *buffer, size_t length);
+void _gcry_log_printmpi (const char *text, gcry_mpi_t mpi);
+void _gcry_log_printsxp (const char *text, gcry_sexp_t sexp);
 
 void _gcry_set_log_verbosity( int level );
 int _gcry_log_verbosity( int level );
@@ -136,6 +183,11 @@ int _gcry_log_verbosity( int level );
 #define log_debug   _gcry_log_debug
 #define log_printf  _gcry_log_printf
 #define log_printhex _gcry_log_printhex
+#define log_printmpi _gcry_log_printmpi
+#define log_printsxp _gcry_log_printsxp
+
+/* Compatibility macro.  */
+#define log_mpidump _gcry_log_printmpi
 
 
 /*-- src/hwfeatures.c --*/
@@ -145,11 +197,22 @@ int _gcry_log_verbosity( int level );
 #define HWF_PADLOCK_SHA  4
 #define HWF_PADLOCK_MMUL 8
 
+#define HWF_INTEL_CPU    16
+#define HWF_INTEL_BMI2   32
+#define HWF_INTEL_SSSE3  64
+#define HWF_INTEL_PCLMUL 128
 #define HWF_INTEL_AESNI  256
+#define HWF_INTEL_RDRAND 512
+#define HWF_INTEL_AVX    1024
+#define HWF_INTEL_AVX2   2048
+
+#define HWF_ARM_NEON     4096
 
 
+gpg_err_code_t _gcry_disable_hw_feature (const char *name);
+void _gcry_detect_hw_features (void);
 unsigned int _gcry_get_hw_features (void);
-void _gcry_detect_hw_features (unsigned int);
+const char *_gcry_enum_hw_features (int idx, unsigned int *r_feature);
 
 
 /*-- mpi/mpiutil.c --*/
@@ -164,6 +227,7 @@ const char *_gcry_mpi_get_hw_config (void);
 #endif
 
 /*-- primegen.c --*/
+gcry_err_code_t _gcry_primegen_init (void);
 gcry_mpi_t _gcry_generate_secret_prime (unsigned int nbits,
                                  gcry_random_level_t random_level,
                                  int (*extra_check)(void*, gcry_mpi_t),
@@ -201,6 +265,8 @@ char *stpcpy (char *a, const char *b);
 int strcasecmp (const char *a, const char *b) _GCRY_GCC_ATTR_PURE;
 #endif
 
+#include "../compat/libcompat.h"
+
 
 /* Macros used to rename missing functions.  */
 #ifndef HAVE_STRTOUL
@@ -222,7 +288,16 @@ int strcasecmp (const char *a, const char *b) _GCRY_GCC_ATTR_PURE;
 
 /* Stack burning.  */
 
-void _gcry_burn_stack (int bytes);
+#ifdef HAVE_GCC_ASM_VOLATILE_MEMORY
+#define  __gcry_burn_stack_dummy() asm volatile ("":::"memory")
+#else
+void __gcry_burn_stack_dummy (void);
+#endif
+
+void __gcry_burn_stack (unsigned int bytes);
+#define _gcry_burn_stack(bytes) \
+	do { __gcry_burn_stack (bytes); \
+	     __gcry_burn_stack_dummy (); } while(0)
 
 
 /* To avoid that a compiler optimizes certain memset calls away, these
@@ -230,10 +305,48 @@ void _gcry_burn_stack (int bytes);
 #define wipememory2(_ptr,_set,_len) do { \
               volatile char *_vptr=(volatile char *)(_ptr); \
               size_t _vlen=(_len); \
-              while(_vlen) { *_vptr=(_set); _vptr++; _vlen--; } \
+              unsigned char _vset=(_set); \
+              fast_wipememory2(_vptr,_vset,_vlen); \
+              while(_vlen) { *_vptr=(_vset); _vptr++; _vlen--; } \
                   } while(0)
 #define wipememory(_ptr,_len) wipememory2(_ptr,0,_len)
 
+#ifdef HAVE_U64_TYPEDEF
+  #define FASTWIPE_T u64
+  #define FASTWIPE_MULT (U64_C(0x0101010101010101))
+#else
+  #define FASTWIPE_T u32
+  #define FASTWIPE_MULT (0x01010101U)
+#endif
+
+/* Following architectures can handle unaligned accesses fast.  */
+#if defined(__i386__) || defined(__x86_64__) || \
+    defined(__powerpc__) || defined(__powerpc64__) || \
+    (defined(__arm__) && defined(__ARM_FEATURE_UNALIGNED)) || \
+    defined(__aarch64__)
+#define fast_wipememory2_unaligned_head(_ptr,_set,_len) /*do nothing*/
+#else
+#define fast_wipememory2_unaligned_head(_vptr,_vset,_vlen) do { \
+              while((size_t)(_vptr)&(sizeof(FASTWIPE_T)-1) && _vlen) \
+                { *_vptr=(_vset); _vptr++; _vlen--; } \
+                  } while(0)
+#endif
+
+/* fast_wipememory2 may leave tail bytes unhandled, in which case tail bytes
+   are handled by wipememory2. */
+#define fast_wipememory2(_vptr,_vset,_vlen) do { \
+              FASTWIPE_T _vset_long = _vset; \
+              fast_wipememory2_unaligned_head(_vptr,_vset,_vlen); \
+              if (_vlen < sizeof(FASTWIPE_T)) \
+                break; \
+              _vset_long *= FASTWIPE_MULT; \
+              do { \
+                volatile FASTWIPE_T *_vptr_long = (volatile void *)_vptr; \
+                *_vptr_long = _vset_long; \
+                _vlen -= sizeof(FASTWIPE_T); \
+                _vptr += sizeof(FASTWIPE_T); \
+              } while (_vlen >= sizeof(FASTWIPE_T)); \
+                  } while (0)
 
 
 /* Digit predicates.  */
@@ -246,11 +359,24 @@ void _gcry_burn_stack (int bytes);
                       || (*(a) >= 'A' && *(a) <= 'F')  \
                       || (*(a) >= 'a' && *(a) <= 'f'))
 
+/* Init functions.  */
+
+gcry_err_code_t _gcry_cipher_init (void);
+gcry_err_code_t _gcry_md_init (void);
+gcry_err_code_t _gcry_pk_init (void);
+gcry_err_code_t _gcry_secmem_module_init (void);
+gcry_err_code_t _gcry_mpi_init (void);
+
+/* Memory management.  */
+#define GCRY_ALLOC_FLAG_SECURE (1 << 0)
+
 
 /*-- sexp.c --*/
-gcry_error_t _gcry_sexp_vbuild (gcry_sexp_t *retsexp, size_t *erroff,
-                                const char *format, va_list arg_ptr);
+gcry_err_code_t _gcry_sexp_vbuild (gcry_sexp_t *retsexp, size_t *erroff,
+                                   const char *format, va_list arg_ptr);
 char *_gcry_sexp_nth_string (const gcry_sexp_t list, int number);
+gpg_err_code_t _gcry_sexp_vextract_param (gcry_sexp_t sexp, const char *path,
+                                          const char *list, va_list arg_ptr);
 
 
 /*-- fips.c --*/
@@ -287,7 +413,7 @@ void _gcry_fips_signal_error (const char *srcfile,
 
 int _gcry_fips_is_operational (void);
 #define fips_is_operational()   (_gcry_global_is_operational ())
-#define fips_not_operational()  (GCRY_GPG_ERR_NOT_OPERATIONAL)
+#define fips_not_operational()  (GPG_ERR_NOT_OPERATIONAL)
 
 int _gcry_fips_test_operational (void);
 int _gcry_fips_test_error_or_operational (void);

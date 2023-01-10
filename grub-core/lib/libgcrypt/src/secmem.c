@@ -1,6 +1,7 @@
 /* secmem.c  -	memory allocation from a secure heap
  * Copyright (C) 1998, 1999, 2000, 2001, 2002,
  *               2003, 2007 Free Software Foundation, Inc.
+ * Copyright (C) 2013 g10 Code GmbH
  *
  * This file is part of Libgcrypt.
  *
@@ -78,6 +79,8 @@ static int show_warning;
 static int not_locked;
 static int no_warning;
 static int suspend_warning;
+static int no_mlock;
+static int no_priv_drop;
 
 /* Stats.  */
 static unsigned int cur_alloced, cur_blocks;
@@ -240,11 +243,19 @@ lock_pool (void *p, size_t n)
 #if defined(USE_CAPABILITIES) && defined(HAVE_MLOCK)
   int err;
 
-  cap_set_proc (cap_from_text ("cap_ipc_lock+ep"));
-  err = mlock (p, n);
-  if (err && errno)
-    err = errno;
-  cap_set_proc (cap_from_text ("cap_ipc_lock+p"));
+  {
+    cap_t cap;
+
+    cap = cap_from_text ("cap_ipc_lock+ep");
+    cap_set_proc (cap);
+    cap_free (cap);
+    err = no_mlock? 0 : mlock (p, n);
+    if (err && errno)
+      err = errno;
+    cap = cap_from_text ("cap_ipc_lock+p");
+    cap_set_proc (cap);
+    cap_free(cap);
+  }
 
   if (err)
     {
@@ -282,22 +293,27 @@ lock_pool (void *p, size_t n)
     }
   else
     {
-      err = mlock (p, n);
+      err = no_mlock? 0 : mlock (p, n);
       if (err && errno)
 	err = errno;
     }
 #else /* !HAVE_BROKEN_MLOCK */
-  err = mlock (p, n);
+  err = no_mlock? 0 : mlock (p, n);
   if (err && errno)
     err = errno;
 #endif /* !HAVE_BROKEN_MLOCK */
 
+  /* Test whether we are running setuid(0).  */
   if (uid && ! geteuid ())
     {
-      /* check that we really dropped the privs.
-       * Note: setuid(0) should always fail */
-      if (setuid (uid) || getuid () != geteuid () || !setuid (0))
-	log_fatal ("failed to reset uid: %s\n", strerror (errno));
+      /* Yes, we are.  */
+      if (!no_priv_drop)
+        {
+          /* Check that we really dropped the privs.
+           * Note: setuid(0) should always fail */
+          if (setuid (uid) || getuid () != geteuid () || !setuid (0))
+            log_fatal ("failed to reset uid: %s\n", strerror (errno));
+        }
     }
 
   if (err)
@@ -339,7 +355,8 @@ lock_pool (void *p, size_t n)
 #else
   (void)p;
   (void)n;
-  log_info ("Please note that you don't have secure memory on this system\n");
+  if (!no_mlock)
+    log_info ("Please note that you don't have secure memory on this system\n");
 #endif
 }
 
@@ -424,6 +441,8 @@ _gcry_secmem_set_flags (unsigned flags)
   was_susp = suspend_warning;
   no_warning = flags & GCRY_SECMEM_FLAG_NO_WARNING;
   suspend_warning = flags & GCRY_SECMEM_FLAG_SUSPEND_WARNING;
+  no_mlock      = flags & GCRY_SECMEM_FLAG_NO_MLOCK;
+  no_priv_drop = flags & GCRY_SECMEM_FLAG_NO_PRIV_DROP;
 
   /* and now issue the warning if it is not longer suspended */
   if (was_susp && !suspend_warning && show_warning)
@@ -445,6 +464,8 @@ _gcry_secmem_get_flags (void)
   flags = no_warning ? GCRY_SECMEM_FLAG_NO_WARNING : 0;
   flags |= suspend_warning ? GCRY_SECMEM_FLAG_SUSPEND_WARNING : 0;
   flags |= not_locked ? GCRY_SECMEM_FLAG_NOT_LOCKED : 0;
+  flags |= no_mlock ? GCRY_SECMEM_FLAG_NO_MLOCK : 0;
+  flags |= no_priv_drop ? GCRY_SECMEM_FLAG_NO_PRIV_DROP : 0;
 
   SECMEM_UNLOCK;
 
@@ -461,7 +482,13 @@ secmem_init (size_t n)
     {
 #ifdef USE_CAPABILITIES
       /* drop all capabilities */
-      cap_set_proc (cap_from_text ("all-eip"));
+      {
+        cap_t cap;
+
+        cap = cap_from_text ("all-eip");
+        cap_set_proc (cap);
+        cap_free (cap);
+      }
 
 #elif !defined(HAVE_DOSISH_SYSTEM)
       uid_t uid;
@@ -503,6 +530,19 @@ _gcry_secmem_init (size_t n)
   secmem_init (n);
 
   SECMEM_UNLOCK;
+}
+
+
+gcry_err_code_t
+_gcry_secmem_module_init ()
+{
+  int err;
+
+  err = ath_mutex_init (&secmem_lock);
+  if (err)
+    log_fatal ("could not allocate secmem lock\n");
+
+  return 0;
 }
 
 
