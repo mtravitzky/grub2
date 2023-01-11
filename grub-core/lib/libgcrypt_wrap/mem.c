@@ -9,32 +9,32 @@
 GRUB_MOD_LICENSE ("GPLv3+");
 
 void *
-gcry_malloc (size_t n)
+_gcry_malloc (size_t n)
 {
   return grub_malloc (n);
 }
 
 void *
-gcry_malloc_secure (size_t n)
+_gcry_malloc_secure (size_t n)
 {
   return grub_malloc (n);
 }
 
 void
-gcry_free (void *a)
+_gcry_free (void *a)
 {
   grub_free (a);
 }
 
 int
-gcry_is_secure (const void *a __attribute__ ((unused)))
+_gcry_is_secure (const void *a __attribute__ ((unused)))
 {
   return 0;
 }
 
 /* FIXME: implement "exit".  */
 void *
-gcry_xcalloc (size_t n, size_t m)
+_gcry_xcalloc (size_t n, size_t m)
 {
   void *ret;
   size_t sz;
@@ -47,7 +47,7 @@ gcry_xcalloc (size_t n, size_t m)
 }
 
 void *
-gcry_xmalloc_secure (size_t n)
+_gcry_xmalloc_secure (size_t n)
 {
   void *ret;
   ret = grub_malloc (n);
@@ -57,7 +57,7 @@ gcry_xmalloc_secure (size_t n)
 }
 
 void *
-gcry_xcalloc_secure (size_t n, size_t m)
+_gcry_xcalloc_secure (size_t n, size_t m)
 {
   void *ret;
   size_t sz;
@@ -70,7 +70,7 @@ gcry_xcalloc_secure (size_t n, size_t m)
 }
 
 void *
-gcry_xmalloc (size_t n)
+_gcry_xmalloc (size_t n)
 {
   void *ret;
   ret = grub_malloc (n);
@@ -80,13 +80,19 @@ gcry_xmalloc (size_t n)
 }
 
 void *
-gcry_xrealloc (void *a, size_t n)
+_gcry_xrealloc (void *a, size_t n)
 {
   void *ret;
   ret = grub_realloc (a, n);
   if (!ret)
     grub_fatal ("gcry_xrealloc failed");
   return ret;
+}
+
+void *
+_gcry_realloc (void *a, size_t n)
+{
+  return _gcry_xrealloc (a, n);
 }
 
 void
@@ -125,6 +131,18 @@ void _gcry_log_bug (const char *fmt, ...)
   grub_fatal ("gcrypt bug");
 }
 
+void _gcry_log_info (const char *fmt, ...)
+{
+  va_list args;
+
+  grub_printf ("gcrypt info: ");
+  va_start (args, fmt);
+  grub_vprintf (fmt, args);
+  va_end (args);
+  grub_refresh ();
+  grub_fatal ("gcrypt info");
+}
+
 gcry_err_code_t
 gpg_error_from_syserror (void)
 {
@@ -137,4 +155,43 @@ gpg_error_from_syserror (void)
     default:
       return GPG_ERR_GENERAL;
     }
+}
+
+gpg_err_code_t
+gpg_err_code_from_syserror (void)
+{
+  return gpg_error_from_syserror();
+}
+
+gpg_err_code_t
+gpg_err_code_from_errno (int err)
+{
+  /* Currently not used.  */
+  (void) err;
+  return GPG_ERR_GENERAL;
+}
+
+const char *
+gpg_strerror (gpg_error_t err)
+{
+  /* Currently not used.  */
+  (void) err;
+  return "gpg error function is not implemented";
+}
+
+const char *
+gpg_strsource (gpg_error_t err)
+{
+  /* Currently not used.  */
+  (void) err;
+  return "gpg error function is not implemented";
+}
+
+gpg_err_code_t
+gpg_err_make_from_errno (gpg_err_source_t source, int err)
+{
+  /* Currently not used.  */
+  (void) source;
+  (void) err;
+  return GPG_ERR_GENERAL;
 }

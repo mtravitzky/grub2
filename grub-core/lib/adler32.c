@@ -81,6 +81,8 @@ adler32_read (void *context)
 
 static gcry_md_spec_t spec_adler32 =
   {
+    /* FIXME: do we care this ?? */
+    0, {0, 0},
     "ADLER32", 0, 0, 0, 4,
     adler32_init, adler32_write, adler32_final, adler32_read,
     sizeof (struct adler32_context),

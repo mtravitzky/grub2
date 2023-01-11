@@ -41,6 +41,8 @@ fi
 if [ -d grub-core/lib/libgcrypt-grub/mpi/generic ]; then 
     rm -rf grub-core/lib/libgcrypt-grub/mpi/generic
 fi
+sed -i -e '/#include\s.*compat\/libcompat\.h/d;
+/#define\sN\?_(a)\s/d' grub-core/lib/libgcrypt-grub/src/g10lib.h
 cp grub-core/lib/libgcrypt-grub/src/g10lib.h include/grub/gcrypt/g10lib.h
 cp -R grub-core/lib/libgcrypt/mpi/generic grub-core/lib/libgcrypt-grub/mpi/generic
 

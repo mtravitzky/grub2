@@ -51,9 +51,14 @@ grub_burn_stack (grub_size_t size)
 }
 
 void
-_gcry_burn_stack (int size)
+__gcry_burn_stack (unsigned int size)
 {
   grub_burn_stack (size);
+}
+
+void
+__gcry_burn_stack_dummy (void)
+{
 }
 
 void __attribute__ ((noreturn))
@@ -64,6 +69,11 @@ _gcry_assert_failed (const char *expr, const char *file, int line,
   grub_fatal ("assertion %s at %s:%d (%s) failed\n", expr, file, line, func);
 }
 
+void __attribute__ ((noreturn))
+_gcry_divide_by_zero (void)
+{
+  grub_fatal ("divide by zero");
+}
 
 void _gcry_log_error (const char *fmt, ...)
 {
@@ -81,6 +91,18 @@ void _gcry_log_error (const char *fmt, ...)
       va_end (args);
       grub_refresh ();
     }
+}
+
+void
+_gcry_bug(const char *file, int line, const char *func)
+{
+  grub_fatal ("... this is a bug (%s:%d:%s)\n", file, line, func);
+}
+
+unsigned int
+_gcry_get_hw_features (void)
+{
+  return 0;
 }
 
 void

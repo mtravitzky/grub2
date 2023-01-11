@@ -151,7 +151,7 @@ grub_parse_rsa_pubkey (grub_uint8_t *der, int dersize,
   return GRUB_ERR_NONE;
 
 cleanup_m_mpi:
-  gcry_mpi_release (certificate->mpis[0]);
+  _gcry_mpi_release (certificate->mpis[0]);
 cleanup_e_data:
   grub_free (e_data);
 cleanup_m_data:
@@ -1053,8 +1053,8 @@ parse_x509_certificate (const void *data, grub_size_t data_size,
   return GRUB_ERR_NONE;
 
 cleanup_mpis:
-  gcry_mpi_release (results->mpis[0]);
-  gcry_mpi_release (results->mpis[1]);
+  _gcry_mpi_release (results->mpis[0]);
+  _gcry_mpi_release (results->mpis[1]);
 cleanup_name:
   grub_free (results->subject);
 cleanup_serial:
@@ -1074,6 +1074,6 @@ certificate_release (struct x509_certificate *cert)
 {
   grub_free (cert->subject);
   grub_free (cert->serial);
-  gcry_mpi_release (cert->mpis[0]);
-  gcry_mpi_release (cert->mpis[1]);
+  _gcry_mpi_release (cert->mpis[0]);
+  _gcry_mpi_release (cert->mpis[1]);
 }

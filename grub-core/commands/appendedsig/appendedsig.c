@@ -311,9 +311,11 @@ grub_verify_appended_signature (const grub_uint8_t *buf, grub_size_t bufsize)
 	      goto cleanup;
 	    }
 
+      /* FIXME: Adapt to new libgcrypt's rsa_verify
 	  rc = _gcry_pubkey_spec_rsa.verify (0, hashmpi, &si->sig_mpi,
 					     pk->mpis, NULL, NULL);
-	  gcry_mpi_release (hashmpi);
+      */
+	  _gcry_mpi_release (hashmpi);
 
 	  if (rc == 0)
 	    {

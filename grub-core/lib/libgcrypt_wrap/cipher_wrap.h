@@ -28,14 +28,11 @@
 #include <sys/types.h>
 
 #define _gcry_mpi_invm gcry_mpi_invm
-#define _gcry_mpi_set gcry_mpi_set
 #define _gcry_mpi_set_ui gcry_mpi_set_ui
 #define size_t grub_size_t
 
 #undef __GNU_LIBRARY__
 #define __GNU_LIBRARY__ 1
-
-#define U64_C(c) (c ## ULL)
 
 #define PUBKEY_FLAG_NO_BLINDING    (1 << 0)
 

@@ -193,7 +193,7 @@ free_pk (struct grub_public_key *pk)
       grub_size_t i;
       for (i = 0; i < ARRAY_SIZE (sk->mpis); i++)
 	if (sk->mpis[i])
-	  gcry_mpi_release (sk->mpis[i]);
+	  _gcry_mpi_release (sk->mpis[i]);
       nsk = sk->next;
       grub_free (sk);
     }
@@ -624,12 +624,16 @@ grub_verify_signature_real (struct grub_pubkey_context *ctxt,
 		  pkalgos[pk].module);
       goto fail;
     }
+  /*
+   * FIXME: accommodate to new libgcrypt's verify
+   *
   if ((*pkalgos[pk].algo)->verify (0, hmpi, mpis, sk->mpis, 0, 0))
     goto fail;
 
   grub_free (readbuf);
 
   return GRUB_ERR_NONE;
+   */
 
  fail:
   grub_free (readbuf);

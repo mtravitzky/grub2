@@ -84,6 +84,33 @@ memchr (const void *s, int c, grub_size_t n)
   return grub_memchr (s, c, n);
 }
 
+static inline char *
+stpcpy (char *dest, const char *src)
+{
+  return grub_stpcpy (dest, src);
+}
+
+static inline long
+atoi (const char *str)
+{
+  return grub_strtol (str, 0, 10);
+}
+
+#include <stdarg.h>
+
+static inline int
+sprintf (char *str,  const char *fmt, ...)
+{
+  va_list ap;
+  int ret;
+
+  va_start (ap, fmt);
+  ret = grub_vsnprintf (str, sizeof(str), fmt, ap);
+  va_end (ap);
+
+  return ret;
+}
+
 #define memcmp grub_memcmp
 #define memcpy grub_memcpy
 #define memmove grub_memmove

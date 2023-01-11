@@ -402,7 +402,7 @@ process_content (grub_uint8_t * content, int size,
 
 cleanup_signerInfos:
   for (i = 0; i < msg->signerInfo_count; i++)
-    gcry_mpi_release (msg->signerInfos[i].sig_mpi);
+    _gcry_mpi_release (msg->signerInfos[i].sig_mpi);
   grub_free (msg->signerInfos);
 cleanup_signed_part:
   asn1_delete_structure (&signed_part);
@@ -503,7 +503,7 @@ pkcs7_signedData_release (struct pkcs7_signedData *msg)
   grub_ssize_t i;
   for (i = 0; i < msg->signerInfo_count; i++)
     {
-      gcry_mpi_release (msg->signerInfos[i].sig_mpi);
+      _gcry_mpi_release (msg->signerInfos[i].sig_mpi);
     }
   grub_free (msg->signerInfos);
 }
