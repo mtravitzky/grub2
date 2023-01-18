@@ -6,6 +6,7 @@
 #include <grub/mm.h>
 #include <grub/safemath.h>
 #include <grub/list.h>
+#include <grub/env.h>
 
 struct newc_head
 {
@@ -440,6 +441,7 @@ grub_err_t
 grub_initrd_publish_key (const char *uuid, const char *key, grub_size_t key_len, const char *path)
 {
   struct grub_key_publisher *cur = NULL;
+  grub_err_t err = GRUB_ERR_NONE;
 
   FOR_LIST_ELEMENTS (cur, kpuber)
     if (grub_uuidcasecmp (cur->name, uuid, sizeof (cur->name)) == 0)
@@ -471,9 +473,32 @@ grub_initrd_publish_key (const char *uuid, const char *key, grub_size_t key_len,
 
   if (!cur->name)
     {
+      const char *superusers;
+
       cur->name = grub_strdup (uuid);
       grub_list_push (GRUB_AS_LIST_P (&kpuber), GRUB_AS_LIST (cur));
-    }
+
+	  superusers = grub_env_get ("superusers");
+	  if (!superusers)
+		{
+		  err = grub_env_set ("superusers", "__lockdown");
+		  if (err)
+			goto error_out;
+		  err = grub_env_set ("unrestricted_menu", "y");
+		  if (err)
+			goto error_out;
+		  grub_env_export("superusers");
+		  grub_env_export("unrestricted_menu");
+		}
+	}
 
   return GRUB_ERR_NONE;
+
+ error_out:
+  if (cur)
+	{
+	  grub_list_remove (GRUB_AS_LIST (cur));
+	  grub_free (cur);
+	}
+  return err;
 }

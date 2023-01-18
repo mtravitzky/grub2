@@ -217,6 +217,19 @@ grub_auth_check_authentication (const char *userlist)
       return GRUB_ERR_NONE;
     }
 
+  {
+	const char *superusers;
+	superusers = grub_env_get ("superusers");
+	if (superusers && grub_strword (superusers, "__lockdown"))
+	  {
+		grub_puts_ (N_("The shell and editor interface is in lockdown mode."));
+		grub_puts_ (N_("To access them you need to setup password protection from YaST."));
+		grub_puts_ (N_("Press any key to continue ..."));
+		grub_getkey ();
+		return GRUB_ACCESS_DENIED;
+	  }
+  }
+
   grub_puts_ (N_("Enter username: "));
 
   if (!grub_username_get (login, sizeof (login) - 1))
