@@ -1,4 +1,4 @@
-/* sha1-ssse3-amd64.S - Intel SSSE3 accelerated SHA-1 transform function
+/* sha1-avx-bmi2-amd64.S - Intel AVX/BMI2 accelerated SHA-1 transform function
  * Copyright (C) 2013 Jussi Kivilinna <jussi.kivilinna@iki.fi>
  *
  * Based on sha1.c:
@@ -30,7 +30,8 @@
 #include <config.h>
 
 #if defined(HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS) && \
-    defined(HAVE_GCC_INLINE_ASM_SSSE3) && defined(USE_SHA1)
+    defined(HAVE_GCC_INLINE_ASM_BMI2) && \
+    defined(HAVE_GCC_INLINE_ASM_AVX) && defined(USE_SHA1)
 
 #ifdef __PIC__
 #  define RIP (%rip)
@@ -103,25 +104,23 @@
 
 #define R_F1(a,b,c,d,e,i) \
 	movl c, RT0; \
+	andn d, b, RT1; \
 	addl WK(i), e; \
-	xorl d, RT0; \
-	movl a, RT1; \
 	andl b, RT0; \
-	roll $30, b; \
-	xorl d, RT0; \
+	rorxl $2, b, b; \
+	addl RT1, e; \
 	leal (RT0,e), e; \
-	roll $5, RT1; \
+	rorxl $27, a, RT1; \
 	addl RT1, e;
 
 #define R_F2(a,b,c,d,e,i) \
 	movl c, RT0; \
 	addl WK(i), e; \
 	xorl b, RT0; \
-	roll $30, b; \
+	rorxl $2, b, b; \
 	xorl d, RT0; \
-	movl a, RT1; \
 	leal (RT0,e), e; \
-	roll $5, RT1; \
+	rorxl $27, a, RT1; \
 	addl RT1, e;
 
 #define R_F3(a,b,c,d,e,i) \
@@ -132,10 +131,9 @@
 	andl d, RT0; \
 	addl RT1, e; \
 	addl WK(i), e; \
-	roll $30, b; \
-	movl a, RT1; \
+	rorxl $2, b, b; \
 	leal (RT0,e), e; \
-	roll $5, RT1; \
+	rorxl $27, a, RT1; \
 	addl RT1, e;
 
 #define R_F4(a,b,c,d,e,i) R_F2(a,b,c,d,e,i)
@@ -147,82 +145,70 @@
 /* Input expansion macros. */
 
 #define W_PRECALC_00_15_0(i, W, tmp0) \
-	movdqu (4*(i))(RDATA), tmp0;
+	vmovdqu (4*(i))(RDATA), tmp0;
 
 #define W_PRECALC_00_15_1(i, W, tmp0) \
-	pshufb BSWAP_REG, tmp0; \
-	movdqa tmp0, W;
+	vpshufb BSWAP_REG, tmp0, W;
 
 #define W_PRECALC_00_15_2(i, W, tmp0) \
-	paddd (.LK_XMM + ((i)/20)*16) RIP, tmp0;
+	vpaddd (.LK_XMM + ((i)/20)*16) RIP, W, tmp0;
 
 #define W_PRECALC_00_15_3(i, W, tmp0) \
-	movdqa tmp0, WK(i&~3);
+	vmovdqa tmp0, WK(i&~3);
 
 #define W_PRECALC_16_31_0(i, W, W_m04, W_m08, W_m12, W_m16, tmp0, tmp1) \
-	movdqa W_m12, W; \
-	palignr $8, W_m16, W; \
-	movdqa W_m04, tmp0; \
-	psrldq $4, tmp0; \
-	pxor W_m08, W;
+	vpalignr $8, W_m16, W_m12, W; \
+	vpsrldq $4, W_m04, tmp0; \
+	vpxor W_m08, W, W;
 
 #define W_PRECALC_16_31_1(i, W, W_m04, W_m08, W_m12, W_m16, tmp0, tmp1) \
-	pxor W_m16, tmp0; \
-	pxor tmp0, W; \
-	movdqa W, tmp1; \
-	movdqa W, tmp0; \
-	pslldq $12, tmp1;
+	vpxor W_m16, tmp0, tmp0; \
+	vpxor tmp0, W, W; \
+	vpslld $1, W, tmp0; \
+	vpslldq $12, W, tmp1; \
+	vpsrld $31, W, W;
 
 #define W_PRECALC_16_31_2(i, W, W_m04, W_m08, W_m12, W_m16, tmp0, tmp1) \
-	psrld $31, W; \
-	pslld $1, tmp0; \
-	por W, tmp0; \
-	movdqa tmp1, W; \
-	psrld $30, tmp1; \
-	pslld $2, W;
+	vpor W, tmp0, tmp0; \
+	vpsrld $30, tmp1, W; \
+	vpslld $2, tmp1, tmp1;
 
 #define W_PRECALC_16_31_3(i, W, W_m04, W_m08, W_m12, W_m16, tmp0, tmp1) \
-	pxor W, tmp0; \
-	pxor tmp1, tmp0; \
-	movdqa tmp0, W; \
-	paddd (.LK_XMM + ((i)/20)*16) RIP, tmp0; \
-	movdqa tmp0, WK((i)&~3);
+	vpxor W, tmp0, tmp0; \
+	vpxor tmp1, tmp0, W; \
+	vpaddd (.LK_XMM + ((i)/20)*16) RIP, W, tmp0; \
+	vmovdqa tmp0, WK((i)&~3);
 
 #define W_PRECALC_32_79_0(i, W, W_m04, W_m08, W_m12, W_m16, W_m20, W_m24, W_m28, tmp0) \
-	movdqa W_m04, tmp0; \
-	pxor W_m28, W; \
-	palignr $8, W_m08, tmp0;
+	vpxor W_m28, W, W; \
+	vpalignr $8, W_m08, W_m04, tmp0;
 
 #define W_PRECALC_32_79_1(i, W, W_m04, W_m08, W_m12, W_m16, W_m20, W_m24, W_m28, tmp0) \
-	pxor W_m16, W; \
-	pxor tmp0, W; \
-	movdqa W, tmp0;
+	vpxor W_m16, W, W; \
+	vpxor tmp0, W, W;
 
 #define W_PRECALC_32_79_2(i, W, W_m04, W_m08, W_m12, W_m16, W_m20, W_m24, W_m28, tmp0) \
-	psrld $30, W; \
-	pslld $2, tmp0; \
-	por W, tmp0;
+	vpsrld $30, W, tmp0; \
+	vpslld $2, W, W;
 
 #define W_PRECALC_32_79_3(i, W, W_m04, W_m08, W_m12, W_m16, W_m20, W_m24, W_m28, tmp0) \
-	movdqa tmp0, W; \
-	paddd (.LK_XMM + ((i)/20)*16) RIP, tmp0; \
-	movdqa tmp0, WK((i)&~3);
-
-#define CLEAR_REG(reg) pxor reg, reg;
+	vpor W, tmp0, W; \
+	vpaddd (.LK_XMM + ((i)/20)*16) RIP, W, tmp0; \
+	vmovdqa tmp0, WK((i)&~3);
 
 
 /*
  * Transform nblks*64 bytes (nblks*16 32-bit words) at DATA.
  *
  * unsigned int
- * _gcry_sha1_transform_amd64_ssse3 (void *ctx, const unsigned char *data,
- *                                   size_t nblks)
+ * _gcry_sha1_transform_amd64_avx_bmi2 (void *ctx, const unsigned char *data,
+ *                                      size_t nblks)
  */
 .text
-.globl _gcry_sha1_transform_amd64_ssse3
-.type _gcry_sha1_transform_amd64_ssse3,@function
+.globl _gcry_sha1_transform_amd64_avx_bmi2
+.type _gcry_sha1_transform_amd64_avx_bmi2,@function
 .align 16
-_gcry_sha1_transform_amd64_ssse3:
+_gcry_sha1_transform_amd64_avx_bmi2:
   /* input:
    *	%rdi: ctx, CTX
    *	%rsi: data (64*nblks bytes)
@@ -232,6 +218,8 @@ _gcry_sha1_transform_amd64_ssse3:
   xorl %eax, %eax;
   cmpq $0, %rdx;
   jz .Lret;
+
+  vzeroupper;
 
   movq %rdx, RNBLKS;
   movq %rdi, RSTATE;
@@ -381,18 +369,20 @@ _gcry_sha1_transform_amd64_ssse3:
 
 .align 16
 .Lend:
-  /* Transform 64-79 + Clear XMM registers. */
-  R( b, c, d, e, a, F4, 64 ); CLEAR_REG(BSWAP_REG);
-  R( a, b, c, d, e, F4, 65 ); CLEAR_REG(Wtmp0);
-  R( e, a, b, c, d, F4, 66 ); CLEAR_REG(Wtmp1);
-  R( d, e, a, b, c, F4, 67 ); CLEAR_REG(W0);
-  R( c, d, e, a, b, F4, 68 ); CLEAR_REG(W1);
-  R( b, c, d, e, a, F4, 69 ); CLEAR_REG(W2);
-  R( a, b, c, d, e, F4, 70 ); CLEAR_REG(W3);
-  R( e, a, b, c, d, F4, 71 ); CLEAR_REG(W4);
-  R( d, e, a, b, c, F4, 72 ); CLEAR_REG(W5);
-  R( c, d, e, a, b, F4, 73 ); CLEAR_REG(W6);
-  R( b, c, d, e, a, F4, 74 ); CLEAR_REG(W7);
+  vzeroall;
+
+  /* Transform 64-79. */
+  R( b, c, d, e, a, F4, 64 );
+  R( a, b, c, d, e, F4, 65 );
+  R( e, a, b, c, d, F4, 66 );
+  R( d, e, a, b, c, F4, 67 );
+  R( c, d, e, a, b, F4, 68 );
+  R( b, c, d, e, a, F4, 69 );
+  R( a, b, c, d, e, F4, 70 );
+  R( e, a, b, c, d, F4, 71 );
+  R( d, e, a, b, c, F4, 72 );
+  R( c, d, e, a, b, F4, 73 );
+  R( b, c, d, e, a, F4, 74 );
   R( a, b, c, d, e, F4, 75 );
   R( e, a, b, c, d, F4, 76 );
   R( d, e, a, b, c, F4, 77 );

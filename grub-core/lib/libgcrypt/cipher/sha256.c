@@ -55,6 +55,22 @@
 # define USE_SSSE3 1
 #endif
 
+/* USE_AVX indicates whether to compile with Intel AVX code. */
+#undef USE_AVX
+#if defined(__x86_64__) && defined(HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS) && \
+    defined(HAVE_GCC_INLINE_ASM_AVX) && \
+    defined(HAVE_INTEL_SYNTAX_PLATFORM_AS)
+# define USE_AVX 1
+#endif
+
+/* USE_AVX2 indicates whether to compile with Intel AVX2/BMI2 code. */
+#undef USE_AVX2
+#if defined(__x86_64__) && defined(HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS) && \
+    defined(HAVE_GCC_INLINE_ASM_AVX2) && defined(HAVE_GCC_INLINE_ASM_BMI2) && \
+    defined(HAVE_INTEL_SYNTAX_PLATFORM_AS)
+# define USE_AVX2 1
+#endif
+
 
 typedef struct {
   gcry_md_block_ctx_t bctx;
@@ -62,17 +78,24 @@ typedef struct {
 #ifdef USE_SSSE3
   unsigned int use_ssse3:1;
 #endif
+#ifdef USE_AVX
+  unsigned int use_avx:1;
+#endif
+#ifdef USE_AVX2
+  unsigned int use_avx2:1;
+#endif
 } SHA256_CONTEXT;
 
 
 static unsigned int
-transform (void *c, const unsigned char *data);
+transform (void *c, const unsigned char *data, size_t nblks);
 
 
 static void
 sha256_init (void *context)
 {
   SHA256_CONTEXT *hd = context;
+  unsigned int features = _gcry_get_hw_features ();
 
   hd->h0 = 0x6a09e667;
   hd->h1 = 0xbb67ae85;
@@ -90,8 +113,17 @@ sha256_init (void *context)
   hd->bctx.bwrite = transform;
 
 #ifdef USE_SSSE3
-  hd->use_ssse3 = (_gcry_get_hw_features () & HWF_INTEL_SSSE3) != 0;
+  hd->use_ssse3 = (features & HWF_INTEL_SSSE3) != 0;
 #endif
+#ifdef USE_AVX
+  /* AVX implementation uses SHLD which is known to be slow on non-Intel CPUs.
+   * Therefore use this implementation on Intel CPUs only. */
+  hd->use_avx = (features & HWF_INTEL_AVX) && (features & HWF_INTEL_CPU);
+#endif
+#ifdef USE_AVX2
+  hd->use_avx2 = (features & HWF_INTEL_AVX2) && (features & HWF_INTEL_BMI2);
+#endif
+  (void)features;
 }
 
 
@@ -99,6 +131,7 @@ static void
 sha224_init (void *context)
 {
   SHA256_CONTEXT *hd = context;
+  unsigned int features = _gcry_get_hw_features ();
 
   hd->h0 = 0xc1059ed8;
   hd->h1 = 0x367cd507;
@@ -116,8 +149,17 @@ sha224_init (void *context)
   hd->bctx.bwrite = transform;
 
 #ifdef USE_SSSE3
-  hd->use_ssse3 = (_gcry_get_hw_features () & HWF_INTEL_SSSE3) != 0;
+  hd->use_ssse3 = (features & HWF_INTEL_SSSE3) != 0;
 #endif
+#ifdef USE_AVX
+  /* AVX implementation uses SHLD which is known to be slow on non-Intel CPUs.
+   * Therefore use this implementation on Intel CPUs only. */
+  hd->use_avx = (features & HWF_INTEL_AVX) && (features & HWF_INTEL_CPU);
+#endif
+#ifdef USE_AVX2
+  hd->use_avx2 = (features & HWF_INTEL_AVX2) && (features & HWF_INTEL_BMI2);
+#endif
+  (void)features;
 }
 
 
@@ -170,7 +212,7 @@ Sum1 (u32 x)
 
 
 static unsigned int
-_transform (void *ctx, const unsigned char *data)
+transform_blk (void *ctx, const unsigned char *data)
 {
   SHA256_CONTEXT *hd = ctx;
   static const u32 K[64] = {
@@ -281,19 +323,49 @@ unsigned int _gcry_sha256_transform_amd64_ssse3(const void *input_data,
 					        u32 state[8], size_t num_blks);
 #endif
 
+#ifdef USE_AVX
+unsigned int _gcry_sha256_transform_amd64_avx(const void *input_data,
+					      u32 state[8], size_t num_blks);
+#endif
+
+#ifdef USE_AVX2
+unsigned int _gcry_sha256_transform_amd64_avx2(const void *input_data,
+					       u32 state[8], size_t num_blks);
+#endif
+
 
 static unsigned int
-transform (void *ctx, const unsigned char *data)
+transform (void *ctx, const unsigned char *data, size_t nblks)
 {
   SHA256_CONTEXT *hd = ctx;
+  unsigned int burn;
 
-#ifdef USE_SSSE3
-  if (hd->use_ssse3)
-    return _gcry_sha256_transform_amd64_ssse3 (data, &hd->h0, 1)
+#ifdef USE_AVX2
+  if (hd->use_avx2)
+    return _gcry_sha256_transform_amd64_avx2 (data, &hd->h0, nblks)
            + 4 * sizeof(void*);
 #endif
 
-  return _transform (hd, data);
+#ifdef USE_AVX
+  if (hd->use_avx)
+    return _gcry_sha256_transform_amd64_avx (data, &hd->h0, nblks)
+           + 4 * sizeof(void*);
+#endif
+
+#ifdef USE_SSSE3
+  if (hd->use_ssse3)
+    return _gcry_sha256_transform_amd64_ssse3 (data, &hd->h0, nblks)
+           + 4 * sizeof(void*);
+#endif
+
+  do
+    {
+      burn = transform_blk (hd, data);
+      data += 64;
+    }
+  while (--nblks);
+
+  return burn;
 }
 
 
@@ -348,7 +420,7 @@ sha256_final(void *context)
   /* append the 64 bit count */
   buf_put_be32(hd->bctx.buf + 56, msb);
   buf_put_be32(hd->bctx.buf + 60, lsb);
-  burn = transform (hd, hd->bctx.buf);
+  burn = transform (hd, hd->bctx.buf, 1);
   _gcry_burn_stack (burn);
 
   p = hd->bctx.buf;

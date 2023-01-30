@@ -50,6 +50,29 @@
 # define USE_SSSE3 1
 #endif
 
+/* USE_AVX indicates whether to compile with Intel AVX code. */
+#undef USE_AVX
+#if defined(__x86_64__) && defined(HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS) && \
+    defined(HAVE_GCC_INLINE_ASM_AVX)
+# define USE_AVX 1
+#endif
+
+/* USE_BMI2 indicates whether to compile with Intel AVX/BMI2 code. */
+#undef USE_BMI2
+#if defined(__x86_64__) && defined(HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS) && \
+    defined(HAVE_GCC_INLINE_ASM_AVX) && defined(HAVE_GCC_INLINE_ASM_BMI2)
+# define USE_BMI2 1
+#endif
+
+/* USE_NEON indicates whether to enable ARM NEON assembly code. */
+#undef USE_NEON
+#if defined(HAVE_ARM_ARCH_V6) && defined(__ARMEL__)
+# if defined(HAVE_COMPATIBLE_GCC_ARM_PLATFORM_AS) && \
+     defined(HAVE_GCC_INLINE_ASM_NEON)
+#  define USE_NEON 1
+# endif
+#endif
+
 
 /* A macro to test whether P is properly aligned for an u32 type.
    Note that config.h provides a suitable replacement for uintptr_t if
@@ -67,16 +90,26 @@ typedef struct
 #ifdef USE_SSSE3
   unsigned int use_ssse3:1;
 #endif
+#ifdef USE_AVX
+  unsigned int use_avx:1;
+#endif
+#ifdef USE_BMI2
+  unsigned int use_bmi2:1;
+#endif
+#ifdef USE_NEON
+  unsigned int use_neon:1;
+#endif
 } SHA1_CONTEXT;
 
 static unsigned int
-transform (void *c, const unsigned char *data);
+transform (void *c, const unsigned char *data, size_t nblks);
 
 
 static void
 sha1_init (void *context)
 {
   SHA1_CONTEXT *hd = context;
+  unsigned int features = _gcry_get_hw_features ();
 
   hd->h0 = 0x67452301;
   hd->h1 = 0xefcdab89;
@@ -91,8 +124,20 @@ sha1_init (void *context)
   hd->bctx.bwrite = transform;
 
 #ifdef USE_SSSE3
-  hd->use_ssse3 = (_gcry_get_hw_features () & HWF_INTEL_SSSE3) != 0;
+  hd->use_ssse3 = (features & HWF_INTEL_SSSE3) != 0;
 #endif
+#ifdef USE_AVX
+  /* AVX implementation uses SHLD which is known to be slow on non-Intel CPUs.
+   * Therefore use this implementation on Intel CPUs only. */
+  hd->use_avx = (features & HWF_INTEL_AVX) && (features & HWF_INTEL_CPU);
+#endif
+#ifdef USE_BMI2
+  hd->use_bmi2 = (features & HWF_INTEL_AVX) && (features & HWF_INTEL_BMI2);
+#endif
+#ifdef USE_NEON
+  hd->use_neon = (features & HWF_ARM_NEON) != 0;
+#endif
+  (void)features;
 }
 
 
@@ -118,11 +163,18 @@ sha1_init (void *context)
 			       } while(0)
 
 
+
+#ifdef USE_NEON
+unsigned int
+_gcry_sha1_transform_armv7_neon (void *state, const unsigned char *data,
+                                 size_t nblks);
+#endif
+
 /*
  * Transform NBLOCKS of each 64 bytes (16 32-bit words) at DATA.
  */
 static unsigned int
-_transform (void *ctx, const unsigned char *data)
+transform_blk (void *ctx, const unsigned char *data)
 {
   SHA1_CONTEXT *hd = ctx;
   const u32 *idata = (const void *)data;
@@ -234,22 +286,58 @@ _transform (void *ctx, const unsigned char *data)
 
 #ifdef USE_SSSE3
 unsigned int
-_gcry_sha1_transform_amd64_ssse3 (void *state, const unsigned char *data);
+_gcry_sha1_transform_amd64_ssse3 (void *state, const unsigned char *data,
+                                  size_t nblks);
+#endif
+
+#ifdef USE_AVX
+unsigned int
+_gcry_sha1_transform_amd64_avx (void *state, const unsigned char *data,
+                                 size_t nblks);
+#endif
+
+#ifdef USE_BMI2
+unsigned int
+_gcry_sha1_transform_amd64_avx_bmi2 (void *state, const unsigned char *data,
+                                     size_t nblks);
 #endif
 
 
 static unsigned int
-transform (void *ctx, const unsigned char *data)
+transform (void *ctx, const unsigned char *data, size_t nblks)
 {
   SHA1_CONTEXT *hd = ctx;
+  unsigned int burn;
 
+#ifdef USE_BMI2
+  if (hd->use_bmi2)
+    return _gcry_sha1_transform_amd64_avx_bmi2 (&hd->h0, data, nblks)
+           + 4 * sizeof(void*);
+#endif
+#ifdef USE_AVX
+  if (hd->use_avx)
+    return _gcry_sha1_transform_amd64_avx (&hd->h0, data, nblks)
+           + 4 * sizeof(void*);
+#endif
 #ifdef USE_SSSE3
   if (hd->use_ssse3)
-    return _gcry_sha1_transform_amd64_ssse3 (&hd->h0, data)
+    return _gcry_sha1_transform_amd64_ssse3 (&hd->h0, data, nblks)
+           + 4 * sizeof(void*);
+#endif
+#ifdef USE_NEON
+  if (hd->use_neon)
+    return _gcry_sha1_transform_armv7_neon (&hd->h0, data, nblks)
            + 4 * sizeof(void*);
 #endif
 
-  return _transform (hd, data);
+  do
+    {
+      burn = transform_blk (hd, data);
+      data += 64;
+    }
+  while (--nblks);
+
+  return burn;
 }
 
 
@@ -306,7 +394,7 @@ sha1_final(void *context)
   /* append the 64 bit count */
   buf_put_be32(hd->bctx.buf + 56, msb);
   buf_put_be32(hd->bctx.buf + 60, lsb);
-  burn = transform( hd, hd->bctx.buf );
+  burn = transform( hd, hd->bctx.buf, 1 );
   _gcry_burn_stack (burn);
 
   p = hd->bctx.buf;

@@ -1,5 +1,5 @@
 /* mac.c  -  message authentication code dispatcher
- * Copyright © 2013 Jussi Kivilinna <jussi.kivilinna@iki.fi>
+ * Copyright (C) 2013 Jussi Kivilinna <jussi.kivilinna@iki.fi>
  *
  * This file is part of Libgcrypt.
  *
@@ -366,6 +366,13 @@ gcry_err_code_t
 _gcry_mac_verify (gcry_mac_hd_t hd, const void *buf, size_t buflen)
 {
   return mac_verify (hd, buf, buflen);
+}
+
+
+int
+_gcry_mac_get_algo (gcry_mac_hd_t hd)
+{
+  return hd->algo;
 }
 
 
