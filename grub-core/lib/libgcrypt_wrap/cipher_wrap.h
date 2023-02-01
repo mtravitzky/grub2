@@ -39,6 +39,8 @@
 #define CIPHER_INFO_NO_WEAK_KEY    1
 
 #define HAVE_U64_TYPEDEF 1
+#define USE_SHA512 1
+#define USE_WHIRLPOOL 1
 
 /* Selftests are in separate modules.  */
 static inline char *
