@@ -348,14 +348,6 @@ grub_crypto_hmac_init (const struct gcry_md_spec *md,
     }
   grub_free (helpkey);
   helpkey = NULL;
-#if 0
-  md->init (ctx);
-
-  md->write (ctx, ipad, md->blocksize); /* inner pad */
-  grub_memset (ipad, 0, md->blocksize);
-  grub_free (ipad);
-  ipad = NULL;
-#endif
 
   ret = grub_malloc (sizeof (*ret));
   if (!ret)
@@ -364,10 +356,8 @@ grub_crypto_hmac_init (const struct gcry_md_spec *md,
   ret->md = md;
   ret->ctx = ctx;
   ret->opad = opad;
-#if 1
   ret->ipad = ipad;
   ret->fini = 0;
-#endif
 
   return ret;
 
@@ -384,14 +374,12 @@ grub_crypto_hmac_write (struct grub_crypto_hmac_handle *hnd,
 			const void *data,
 			grub_size_t datalen)
 {
-#if 1
   if (hnd->fini)
 	{
 	  hnd->md->init (hnd->ctx);
 	  hnd->md->write (hnd->ctx, hnd->ipad, hnd->md->blocksize); /* inner pad */
 	  hnd->fini = 0;
 	}
-#endif
   hnd->md->write (hnd->ctx, data, datalen);
 }
 
@@ -399,41 +387,17 @@ gcry_err_code_t
 grub_crypto_hmac_fini (struct grub_crypto_hmac_handle *hnd, void *out)
 {
   grub_uint8_t *p;
-#if 0
-  grub_uint8_t *ctx2;
-
-  ctx2 = grub_malloc (hnd->md->contextsize);
-  if (!ctx2)
-    return GPG_ERR_OUT_OF_MEMORY;
-#endif
 
   hnd->md->final (hnd->ctx);
-#if 0
-  hnd->md->read (hnd->ctx);
-#endif
   p = hnd->md->read (hnd->ctx);
 
   hnd->md->init (hnd->ctx);
   hnd->md->write (hnd->ctx, hnd->opad, hnd->md->blocksize);
   hnd->md->write (hnd->ctx, p, hnd->md->mdlen);
   hnd->md->final (hnd->ctx);
-#if 0
-  grub_memset (hnd->opad, 0, hnd->md->blocksize);
-  grub_free (hnd->opad);
-  grub_memset (hnd->ctx, 0, hnd->md->contextsize);
-  grub_free (hnd->ctx);
-#endif
 
   grub_memcpy (out, hnd->md->read (hnd->ctx), hnd->md->mdlen);
-#if 0
-  grub_memset (hnd->ctx, 0, hnd->md->contextsize);
-  grub_free (hnd->ctx);
-#endif
 
-#if 0
-  grub_memset (hnd, 0, sizeof (*hnd));
-  grub_free (hnd);
-#endif
   hnd->fini = 1;
 
   return GPG_ERR_NO_ERROR;
