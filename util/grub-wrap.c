@@ -151,8 +151,9 @@ main (int argc, char *argv[])
     grub_util_error (_("cannot open `%s': %s"), arguments.output, strerror (errno));
 
   grub_install_generate_image (NULL, NULL, out, NULL, NULL, NULL, NULL, 0,
+			       NULL, 0,
 			       NULL, arguments.image_target,
-			       0, GRUB_COMPRESSION_NONE, NULL,
+			       0, 0, GRUB_COMPRESSION_NONE, NULL,
 			       arguments.sbat, 0,
 			       arguments.input, arguments.name);
 
