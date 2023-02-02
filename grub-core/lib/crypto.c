@@ -370,6 +370,19 @@ grub_crypto_hmac_init (const struct gcry_md_spec *md,
 }
 
 void
+grub_crypto_hmac_free (struct grub_crypto_hmac_handle *hnd)
+{
+  grub_memset (hnd->opad, 0, hnd->md->blocksize);
+  grub_free (hnd->opad);
+  grub_memset (hnd->ipad, 0, hnd->md->blocksize);
+  grub_free (hnd->ipad);
+  grub_memset (hnd->ctx, 0, hnd->md->contextsize);
+  grub_free (hnd->ctx);
+  grub_memset (hnd, 0, sizeof (*hnd));
+  grub_free (hnd);
+}
+
+void
 grub_crypto_hmac_write (struct grub_crypto_hmac_handle *hnd,
 			const void *data,
 			grub_size_t datalen)
@@ -409,15 +422,16 @@ grub_crypto_hmac_buffer (const struct gcry_md_spec *md,
 			 const void *data, grub_size_t datalen, void *out)
 {
   struct grub_crypto_hmac_handle *hnd;
-
+  gcry_err_code_t rc;
   hnd = grub_crypto_hmac_init (md, key, keylen);
   if (!hnd)
     return GPG_ERR_OUT_OF_MEMORY;
 
   grub_crypto_hmac_write (hnd, data, datalen);
-  return grub_crypto_hmac_fini (hnd, out);
+  rc = grub_crypto_hmac_fini (hnd, out);
+  grub_crypto_hmac_free(hnd);
+  return rc;
 }
-
 
 grub_err_t
 grub_crypto_gcry_error (gcry_err_code_t in)
