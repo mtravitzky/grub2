@@ -101,6 +101,7 @@ grub_crypto_pbkdf2 (const struct gcry_md_spec *md,
 
 	  if (rc != GPG_ERR_NO_ERROR)
 	    {
+		  grub_crypto_hmac_free(hnd);
 	      grub_free (tmp);
 	      return rc;
 	    }
@@ -112,6 +113,7 @@ grub_crypto_pbkdf2 (const struct gcry_md_spec *md,
       grub_memcpy (DK + (i - 1) * hLen, T, i == l ? r : hLen);
     }
 
+  grub_crypto_hmac_free(hnd);
   grub_free (tmp);
 
   return GPG_ERR_NO_ERROR;

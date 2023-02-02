@@ -354,6 +354,7 @@ void grub_burn_stack (grub_size_t size);
 struct grub_crypto_hmac_handle *
 grub_crypto_hmac_init (const struct gcry_md_spec *md,
 		       const void *key, grub_size_t keylen);
+void grub_crypto_hmac_free (struct grub_crypto_hmac_handle *hnd);
 void
 grub_crypto_hmac_write (struct grub_crypto_hmac_handle *hnd,
 			const void *data,
