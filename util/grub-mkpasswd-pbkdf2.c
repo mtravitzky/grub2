@@ -114,16 +114,17 @@ int
 main (int argc, char *argv[])
 {
   struct arguments arguments = {
-    .count = 10000,
+    .count = 4056386,
     .buflen = 64,
     .saltlen = 64
   };
   char *result, *ptr;
   gcry_err_code_t gcry_err;
   grub_uint8_t *buf, *salt;
-  char pass1[GRUB_AUTH_MAX_PASSLEN];
+  char pass1[GRUB_AUTH_MAX_PASSLEN] = {'f','o','o','b','a','r','\0'};
+#if 0
   char pass2[GRUB_AUTH_MAX_PASSLEN];
-
+#endif
   grub_util_host_init (&argc, &argv);
 
   /* Check for options.  */
@@ -134,7 +135,9 @@ main (int argc, char *argv[])
     }
 
   buf = xmalloc (arguments.buflen);
-  salt = xmalloc (arguments.saltlen);
+  salt = grub_zalloc (arguments.saltlen);
+
+#if 0
 
   printf ("%s", _("Enter password: "));
   if (!grub_password_get (pass1, GRUB_AUTH_MAX_PASSLEN))
@@ -168,6 +171,7 @@ main (int argc, char *argv[])
       free (salt);
       grub_util_error ("%s", _("couldn't retrieve random data for salt"));
     }
+#endif
 
   gcry_err = grub_crypto_pbkdf2 (GRUB_MD_SHA512,
 				 (grub_uint8_t *) pass1, strlen (pass1),
