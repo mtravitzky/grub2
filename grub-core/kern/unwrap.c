@@ -131,6 +131,9 @@ grub_unwrap_open (grub_file_t io, enum grub_file_type type)
     case GRUB_FILE_TYPE_FONT:
       grub_strncpy(name, ".GRUBpf2", 8);
       break;
+    case GRUB_FILE_TYPE_LINUX_INITRD:
+      grub_strncpy(name, ".GRUBini", 8);
+      break;
 
     /* Don't touch other files. */
     default:

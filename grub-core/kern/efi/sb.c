@@ -168,6 +168,7 @@ shim_lock_verifier_init (grub_file_t io __attribute__ ((unused)),
       return GRUB_ERR_NONE;
 
     case GRUB_FILE_TYPE_FONT:
+    case GRUB_FILE_TYPE_LINUX_INITRD:
       *context = &wrapper_pe_requirements;
       *flags = GRUB_VERIFY_FLAGS_SINGLE_CHUNK;
       return GRUB_ERR_NONE;
@@ -175,7 +176,6 @@ shim_lock_verifier_init (grub_file_t io __attribute__ ((unused)),
     /* Files that do not affect secureboot state. */
     case GRUB_FILE_TYPE_NONE:
     case GRUB_FILE_TYPE_LOOPBACK:
-    case GRUB_FILE_TYPE_LINUX_INITRD:
     case GRUB_FILE_TYPE_OPENBSD_RAMDISK:
     case GRUB_FILE_TYPE_XNU_RAMDISK:
     case GRUB_FILE_TYPE_SIGNATURE:
