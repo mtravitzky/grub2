@@ -349,6 +349,10 @@ grub_crypto_hmac_init (const struct gcry_md_spec *md,
   grub_free (helpkey);
   helpkey = NULL;
 
+  md->init (ctx);
+
+  md->write (ctx, ipad, md->blocksize);
+
   ret = grub_malloc (sizeof (*ret));
   if (!ret)
     goto err;
