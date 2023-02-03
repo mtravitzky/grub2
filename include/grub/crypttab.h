@@ -19,4 +19,6 @@ extern struct grub_key_publisher *EXPORT_VAR (kpuber);
 grub_err_t
 grub_initrd_publish_key (const char *uuid, const char *key, grub_size_t key_len, const char *path);
 
+void
+grub_initrd_discard_key (void);
 #endif /* ! GRUB_CRYPTTAB_HEADER */
