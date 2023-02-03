@@ -167,7 +167,9 @@ shim_lock_verifier_init (grub_file_t io __attribute__ ((unused)),
       *flags = GRUB_VERIFY_FLAGS_SINGLE_CHUNK;
       return GRUB_ERR_NONE;
 
+#if 0
     case GRUB_FILE_TYPE_FONT:
+#endif
     case GRUB_FILE_TYPE_LINUX_INITRD:
       *context = &wrapper_pe_requirements;
       *flags = GRUB_VERIFY_FLAGS_SINGLE_CHUNK;
@@ -200,6 +202,9 @@ shim_lock_verifier_init (grub_file_t io __attribute__ ((unused)),
     case GRUB_FILE_TYPE_LOADENV:
     case GRUB_FILE_TYPE_SAVEENV:
     case GRUB_FILE_TYPE_VERIFY_SIGNATURE:
+#if 1
+    case GRUB_FILE_TYPE_FONT:
+#endif
       *flags = GRUB_VERIFY_FLAGS_SKIP_VERIFICATION;
       return GRUB_ERR_NONE;
 
