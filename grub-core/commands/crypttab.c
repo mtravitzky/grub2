@@ -49,6 +49,22 @@ grub_initrd_publish_key (const char *uuid, const char *key, grub_size_t key_len,
   return GRUB_ERR_NONE;
 }
 
+void
+grub_initrd_discard_key (void)
+{
+  struct grub_key_publisher *cur, *nxt;
+
+  FOR_LIST_ELEMENTS_SAFE (cur, nxt, kpuber)
+	{
+	  grub_list_remove (GRUB_AS_LIST (cur));
+	  grub_memset (cur->key, 0, cur->key_len);
+	  grub_free (cur->name);
+	  grub_free (cur->path);
+	  grub_free (cur->key);
+	  grub_free (cur);
+	}
+}
+
 static grub_err_t
 grub_cmd_crypttab_entry (grub_command_t cmd __attribute__ ((unused)),
 	       int argc, char **argv)

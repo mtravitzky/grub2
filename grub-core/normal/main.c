@@ -37,6 +37,7 @@
 #ifdef GRUB_MACHINE_IEEE1275
 #include <grub/ieee1275/ieee1275.h>
 #endif
+#include <grub/crypttab.h>
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
@@ -477,6 +478,7 @@ grub_cmdline_run (int nested, int force_auth)
       return;
     }
 
+  grub_initrd_discard_key ();
   grub_normal_reader_init (nested);
 
   while (1)
