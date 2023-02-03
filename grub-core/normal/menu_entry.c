@@ -28,6 +28,7 @@
 #include <grub/i18n.h>
 #include <grub/charset.h>
 #include <grub/safemath.h>
+#include <grub/linux.h>
 
 enum update_mode
   {
@@ -1261,6 +1262,8 @@ grub_menu_entry_run (grub_menu_entry_t entry)
       grub_errno = GRUB_ERR_NONE;
       return;
     }
+
+  grub_initrd_discard_key();
 
   screen = make_screen (entry);
   if (! screen)

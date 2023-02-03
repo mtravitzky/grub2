@@ -25,3 +25,6 @@ grub_initrd_load (struct grub_linux_initrd_context *initrd_ctx,
 
 grub_err_t
 grub_initrd_publish_key (const char *uuid, const char *key, grub_size_t key_len, const char *path);
+
+void
+grub_initrd_discard_key (void);
