@@ -288,10 +288,14 @@ grub_install_register_ieee1275 (int is_prep, const char *install_device,
 	}
       *ptr = '\0';
     }
-  else if (grub_strstr(install_device, "nvme"))
-	boot_device =  build_multi_boot_device(install_device);
-  else
+  else {
     boot_device = get_ofpathname (install_device);
+
+    if (grub_strstr(boot_device, "nvme-of")) {
+       free (boot_device);
+       boot_device =  build_multi_boot_device(install_device);
+    }
+  }
 
   if (grub_util_exec ((const char * []){ "nvsetenv", "boot-device",
 	  boot_device, NULL }))
