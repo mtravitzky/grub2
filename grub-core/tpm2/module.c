@@ -144,20 +144,20 @@ static grub_extcmd_t grub_tpm2_protector_clear_cmd;
 static struct grub_tpm2_protector_context grub_tpm2_protector_ctx = { 0 };
 
 static grub_err_t
-grub_tpm2_protector_srk_read_keyfile (const char *filepath, void **buffer,
-                                      grub_size_t *buffer_size)
+grub_tpm2_protector_read_file (const char *filepath, void **buffer,
+                               grub_size_t *buffer_size)
 {
-  grub_file_t sealed_key_file;
-  grub_off_t sealed_key_size;
-  void *sealed_key_buffer;
-  grub_off_t sealed_key_read;
+  grub_file_t file;
+  grub_off_t file_size;
+  void *file_buffer;
+  grub_off_t file_read;
 
   /* Using GRUB_FILE_TYPE_SIGNATURE ensures we do not hash the keyfile into PCR9
    * otherwise we'll never be able to predict the value of PCR9 at unseal time */
-  sealed_key_file = grub_file_open (filepath, GRUB_FILE_TYPE_SIGNATURE);
-  if (!sealed_key_file)
+  file = grub_file_open (filepath, GRUB_FILE_TYPE_SIGNATURE);
+  if (!file)
     {
-      grub_dprintf ("tpm2", "Could not open sealed key file.\n");
+      grub_dprintf ("tpm2", "Could not open file: %s\n", filepath);
       /* grub_file_open sets grub_errno on error, and if we do no unset it,
        * future calls to grub_file_open will fail (and so will anybody up the
        * stack who checks the value, if any). */
@@ -165,44 +165,43 @@ grub_tpm2_protector_srk_read_keyfile (const char *filepath, void **buffer,
       return GRUB_ERR_FILE_NOT_FOUND;
     }
 
-  sealed_key_size = grub_file_size (sealed_key_file);
-  if (!sealed_key_size)
+  file_size = grub_file_size (file);
+  if (!file_size)
     {
-      grub_dprintf ("tpm2", "Could not read sealed key file size.\n");
-      grub_file_close (sealed_key_file);
+      grub_dprintf ("tpm2", "Could not read file size: %s\n", filepath);
+      grub_file_close (file);
       return GRUB_ERR_OUT_OF_RANGE;
     }
 
-  sealed_key_buffer = grub_malloc (sealed_key_size);
-  if (!sealed_key_buffer)
+  file_buffer = grub_malloc (file_size);
+  if (!file_buffer)
     {
-      grub_dprintf ("tpm2", "Could not allocate buffer for sealed key.\n");
-      grub_file_close (sealed_key_file);
+      grub_dprintf ("tpm2", "Could not allocate buffer: %s\n", filepath);
+      grub_file_close (file);
       return GRUB_ERR_OUT_OF_MEMORY;
     }
 
-  sealed_key_read = grub_file_read (sealed_key_file, sealed_key_buffer,
-                                    sealed_key_size);
-  if (sealed_key_read != sealed_key_size)
+  file_read = grub_file_read (file, file_buffer, file_size);
+  if (file_read != file_size)
     {
-      grub_dprintf ("tpm2", "Could not retrieve sealed key file contents.\n");
-      grub_free (sealed_key_buffer);
-      grub_file_close (sealed_key_file);
+      grub_dprintf ("tpm2", "Could not retrieve file contents: %s\n", filepath);
+      grub_free (file_buffer);
+      grub_file_close (file);
       return GRUB_ERR_FILE_READ_ERROR;
     }
 
-  grub_file_close (sealed_key_file);
+  grub_file_close (file);
 
-  *buffer = sealed_key_buffer;
-  *buffer_size = sealed_key_size;
+  *buffer = file_buffer;
+  *buffer_size = file_size;
 
   return GRUB_ERR_NONE;
 }
 
 static grub_err_t
-grub_tpm2_protector_srk_unmarshal_keyfile (void *sealed_key,
-                                           grub_size_t sealed_key_size,
-                                           TPM2_SEALED_KEY *sk)
+grub_tpm2_protector_unmarshal_keyfile (void *sealed_key,
+                                       grub_size_t sealed_key_size,
+                                       TPM2_SEALED_KEY *sk)
 {
   struct grub_tpm2_buffer buf;
 
@@ -374,14 +373,14 @@ grub_tpm2_protector_srk_recover (const struct grub_tpm2_protector_context *ctx,
   grub_err_t err;
 
   /* Retrieve Sealed Key */
-  err = grub_tpm2_protector_srk_read_keyfile (ctx->keyfile, &sealed_key_bytes,
-                                              &sealed_key_size);
+  err = grub_tpm2_protector_read_file (ctx->keyfile, &sealed_key_bytes,
+                                       &sealed_key_size);
   if (err)
     return grub_error (err, N_("Failed to read key file %s"), ctx->keyfile);
 
-  err = grub_tpm2_protector_srk_unmarshal_keyfile (sealed_key_bytes,
-                                                   sealed_key_size,
-                                                   &sealed_key);
+  err = grub_tpm2_protector_unmarshal_keyfile (sealed_key_bytes,
+                                               sealed_key_size,
+                                               &sealed_key);
   if (err)
     {
       grub_error (err, N_("Failed to unmarshal key, ensure the key file is in "
