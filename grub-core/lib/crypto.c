@@ -102,7 +102,7 @@ _gcry_bug(const char *file, int line, const char *func)
 unsigned int
 _gcry_get_hw_features (void)
 {
-  return 0;
+  return HWF_INTEL_SSSE3;
 }
 
 void

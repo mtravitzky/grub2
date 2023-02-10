@@ -573,4 +573,22 @@ struct pk_encoding_ctx
 
 #define gcry_mpi_get_nbits _gcry_mpi_get_nbits
 #define gcry_mpi_scan _gcry_mpi_scan
+
+/*-- src/hwfeatures.c --*/
+/* (Do not change these values unless synced with the asm code.)  */
+#define HWF_PADLOCK_RNG  1
+#define HWF_PADLOCK_AES  2
+#define HWF_PADLOCK_SHA  4
+#define HWF_PADLOCK_MMUL 8
+
+#define HWF_INTEL_CPU    16
+#define HWF_INTEL_BMI2   32
+#define HWF_INTEL_SSSE3  64
+#define HWF_INTEL_PCLMUL 128
+#define HWF_INTEL_AESNI  256
+#define HWF_INTEL_RDRAND 512
+#define HWF_INTEL_AVX    1024
+#define HWF_INTEL_AVX2   2048
+
+#define HWF_ARM_NEON     4096
 #endif

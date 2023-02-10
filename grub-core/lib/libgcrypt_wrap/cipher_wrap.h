@@ -40,6 +40,7 @@
 
 #define HAVE_U64_TYPEDEF 1
 #define USE_SHA512 1
+#define USE_SHA256 1
 #define USE_WHIRLPOOL 1
 
 /* Selftests are in separate modules.  */
