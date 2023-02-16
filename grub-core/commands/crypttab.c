@@ -3,9 +3,51 @@
 #include <grub/command.h>
 #include <grub/misc.h>
 #include <grub/i18n.h>
-#include <grub/linux.h>
+#include <grub/mm.h>
+#include <grub/list.h>
+#include <grub/crypttab.h>
 
 GRUB_MOD_LICENSE ("GPLv3+");
+
+struct grub_key_publisher *kpuber;
+
+grub_err_t
+grub_initrd_publish_key (const char *uuid, const char *key, grub_size_t key_len, const char *path)
+{
+  struct grub_key_publisher *cur =  grub_named_list_find (GRUB_AS_NAMED_LIST (kpuber), uuid);
+
+  if (!cur)
+    cur = grub_zalloc (sizeof (*cur));
+  if (!cur)
+    return grub_errno;
+
+  if (key && key_len)
+    {
+      grub_free (cur->key);
+      cur->key = grub_malloc (key_len);
+      if (!cur->key)
+	{
+	  grub_free (cur);
+	  return grub_errno;
+	}
+      grub_memcpy (cur->key, key, key_len);
+      cur->key_len = key_len;
+    }
+
+  if (path)
+    {
+      grub_free (cur->path);
+      cur->path = grub_strdup (path);
+    }
+
+  if (!cur->name)
+    {
+      cur->name = grub_strdup (uuid);
+      grub_list_push (GRUB_AS_LIST_P (&kpuber), GRUB_AS_LIST (cur));
+    }
+
+  return GRUB_ERR_NONE;
+}
 
 static grub_err_t
 grub_cmd_crypttab_entry (grub_command_t cmd __attribute__ ((unused)),

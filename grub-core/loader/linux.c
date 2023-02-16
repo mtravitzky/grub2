@@ -6,6 +6,7 @@
 #include <grub/mm.h>
 #include <grub/safemath.h>
 #include <grub/list.h>
+#include <grub/crypttab.h>
 
 struct newc_head
 {
@@ -39,18 +40,6 @@ struct dir
   struct dir *next;
   struct dir *child;
 };
-
-struct grub_key_publisher
-{
-  struct grub_key_publisher *next;
-  struct grub_key_publisher **prev;
-  char *name; /* UUID */
-  char *path;
-  char *key;
-  grub_size_t key_len;
-};
-
-static struct grub_key_publisher *kpuber;
 
 static char
 hex (grub_uint8_t val)
@@ -420,43 +409,5 @@ grub_initrd_load (struct grub_linux_initrd_context *initrd_ctx,
     }
   free_dir (root);
   root = 0;
-  return GRUB_ERR_NONE;
-}
-
-grub_err_t
-grub_initrd_publish_key (const char *uuid, const char *key, grub_size_t key_len, const char *path)
-{
-  struct grub_key_publisher *cur =  grub_named_list_find (GRUB_AS_NAMED_LIST (kpuber), uuid);
-
-  if (!cur)
-    cur = grub_zalloc (sizeof (*cur));
-  if (!cur)
-    return grub_errno;
-
-  if (key && key_len)
-    {
-      grub_free (cur->key);
-      cur->key = grub_malloc (key_len);
-      if (!cur->key)
-	{
-	  grub_free (cur);
-	  return grub_errno;
-	}
-      grub_memcpy (cur->key, key, key_len);
-      cur->key_len = key_len;
-    }
-
-  if (path)
-    {
-      grub_free (cur->path);
-      cur->path = grub_strdup (path);
-    }
-
-  if (!cur->name)
-    {
-      cur->name = grub_strdup (uuid);
-      grub_list_push (GRUB_AS_LIST_P (&kpuber), GRUB_AS_LIST (cur));
-    }
-
   return GRUB_ERR_NONE;
 }
