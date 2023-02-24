@@ -2659,3 +2659,9 @@ module = {
   name = crypttab;
   common = commands/crypttab.c;
 };
+
+module = {
+  name = boot_loader_interface;
+  efi = commands/boot_loader_interface.c;
+  enable = efi;
+};
