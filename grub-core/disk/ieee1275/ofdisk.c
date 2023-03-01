@@ -24,6 +24,9 @@
 #include <grub/ieee1275/ofdisk.h>
 #include <grub/i18n.h>
 #include <grub/time.h>
+#include <grub/env.h>
+
+#define RETRY_DEFAULT_TIMEOUT 15000
 
 static char *last_devpath;
 static grub_ieee1275_ihandle_t last_ihandle;
@@ -783,7 +786,7 @@ compute_dev_path (const char *name)
 }
 
 static grub_err_t
-grub_ofdisk_open (const char *name, grub_disk_t disk)
+grub_ofdisk_open_real (const char *name, grub_disk_t disk)
 {
   grub_ieee1275_phandle_t dev;
   char *devpath;
@@ -883,6 +886,41 @@ grub_ofdisk_open (const char *name, grub_disk_t disk)
   return 0;
 }
 
+static grub_uint64_t
+grub_ofdisk_disk_timeout(void)
+{
+   if(grub_env_get("ofdisk_retry_timeout") != NULL)
+     {
+	grub_uint64_t retry = grub_strtoul(grub_env_get("ofdisk_retry_timeout"), 0, 10);
+	if(retry)
+	  return retry;
+     }
+
+   return RETRY_DEFAULT_TIMEOUT;
+}
+
+static grub_err_t
+grub_ofdisk_open (const char *name, grub_disk_t disk)
+{
+  grub_err_t err;
+  grub_uint64_t timeout = grub_get_time_ms () + grub_ofdisk_disk_timeout();
+
+ retry:
+  err = grub_ofdisk_open_real (name, disk);
+
+  if (err == GRUB_ERR_UNKNOWN_DEVICE)
+    {
+      if (grub_get_time_ms () < timeout)
+        {
+          grub_dprintf ("ofdisk","Failed to open disk %s. Retrying...\n", name);
+          grub_errno = GRUB_ERR_NONE;
+          goto retry;
+	}
+    }
+
+  return err;
+}
+
 static void
 grub_ofdisk_close (grub_disk_t disk)
 {
@@ -919,7 +957,7 @@ grub_ofdisk_prepare (grub_disk_t disk, grub_disk_addr_t sector)
 }
 
 static grub_err_t
-grub_ofdisk_read (grub_disk_t disk, grub_disk_addr_t sector,
+grub_ofdisk_read_real (grub_disk_t disk, grub_disk_addr_t sector,
 		  grub_size_t size, char *buf)
 {
   grub_err_t err;
@@ -936,6 +974,29 @@ grub_ofdisk_read (grub_disk_t disk, grub_disk_addr_t sector,
 		       disk->name);
 
   return 0;
+}
+
+static grub_err_t
+grub_ofdisk_read (grub_disk_t disk, grub_disk_addr_t sector,
+		  grub_size_t size, char *buf)
+{
+  grub_err_t err;
+  grub_uint64_t timeout = grub_get_time_ms () + grub_ofdisk_disk_timeout();
+
+ retry:
+  err = grub_ofdisk_read_real (disk, sector, size, buf);
+
+  if (err == GRUB_ERR_READ_ERROR)
+    {
+      if (grub_get_time_ms () < timeout)
+        {
+          grub_dprintf ("ofdisk","Failed to read disk %s. Retrying...\n", (char*)disk->data);
+          grub_errno = GRUB_ERR_NONE;
+          goto retry;
+	}
+    }
+
+  return err;
 }
 
 static grub_err_t
