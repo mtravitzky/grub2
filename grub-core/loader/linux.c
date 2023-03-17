@@ -32,6 +32,7 @@ struct grub_linux_initrd_component
   char *buf;
   char *newc_name;
   grub_off_t size;
+  grub_uint32_t mode;
 };
 
 struct dir
@@ -201,6 +202,7 @@ grub_initrd_component (const char *buf, int bufsz, const char *newc_name,
   grub_memcpy (comp->buf, buf, bufsz);
   initrd_ctx->nfiles++;
   comp->size = bufsz;
+  comp->mode = 0100400;
   if (grub_add (initrd_ctx->size, comp->size,
 		&initrd_ctx->size))
     goto overflow;
@@ -270,6 +272,7 @@ grub_initrd_init (int argc, char *argv[],
 		  grub_initrd_close (initrd_ctx);
 		  return grub_errno;
 		}
+	      initrd_ctx->components[i].mode = 0100777;
 	      name_len = grub_strlen (initrd_ctx->components[i].newc_name) + 1;
 	      if (grub_add (initrd_ctx->size,
 			    ALIGN_UP (sizeof (struct newc_head) + name_len, 4),
@@ -371,6 +374,7 @@ grub_initrd_load (struct grub_linux_initrd_context *initrd_ctx,
       if (initrd_ctx->components[i].newc_name)
 	{
 	  grub_size_t dir_size;
+	  grub_uint32_t mode = initrd_ctx->components[i].mode; 
 
 	  if (insert_dir (initrd_ctx->components[i].newc_name, &root, ptr,
 			  &dir_size))
@@ -382,7 +386,7 @@ grub_initrd_load (struct grub_linux_initrd_context *initrd_ctx,
 	  ptr += dir_size;
 	  ptr = make_header (ptr, initrd_ctx->components[i].newc_name,
 			     grub_strlen (initrd_ctx->components[i].newc_name) + 1,
-			     0100777,
+			     mode,
 			     initrd_ctx->components[i].size);
 	  newc = 1;
 	}
