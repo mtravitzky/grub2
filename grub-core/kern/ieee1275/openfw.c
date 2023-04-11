@@ -354,13 +354,16 @@ static char *
 grub_ieee1275_get_devargs (const char *path)
 {
   char *colon = grub_strchr (path, ':');
-  char *colon_check = colon;
 
-  /* Find the last occurence of colon */
-  while(colon_check){
-    colon = colon_check;
-    colon_check = grub_strchr (colon+1, ':');
-  }
+  /* Use the same logic in grub_ieee1275_get_devname for nvme-of arguments */
+  if (grub_strstr(path, "nvme-of"))
+    {
+      char *namespace_split = grub_strstr(path,"/namespace@");
+      if (namespace_split)
+	colon = grub_strchr (namespace_split, ':');
+      else
+	colon = NULL;
+    }
 
   if (! colon)
     return 0;
