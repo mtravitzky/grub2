@@ -27,8 +27,10 @@
 #include <grub/verify.h>
 #include <grub/dl.h>
 #include <grub/extcmd.h>
+#ifdef GRUB_MACHINE_EFI
 #include <grub/tpm2/tpm2.h>
 #include <grub/efi/efi.h>
+#endif
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
@@ -87,12 +89,6 @@ struct grub_file_verifier grub_tpm_verifier = {
   .verify_string = grub_tpm_verify_string,
 };
 
-/*
- * Preserve current PCR values and record them to an EFI variable
- */
-#define GRUB2_PCR_BITMASK_DEFAULT	((1 << 16) - 1)
-#define GRUB2_PCR_BITMASK_ALL		((1 << 24) - 1)
-
 static const struct grub_arg_option grub_tpm_record_pcrs_options[] =
   {
     {
@@ -107,6 +103,14 @@ static const struct grub_arg_option grub_tpm_record_pcrs_options[] =
 
     {0, 0, 0, 0, 0, 0}
   };
+
+#ifdef GRUB_MACHINE_EFI
+
+/*
+ * Preserve current PCR values and record them to an EFI variable
+ */
+#define GRUB2_PCR_BITMASK_DEFAULT	((1 << 16) - 1)
+#define GRUB2_PCR_BITMASK_ALL		((1 << 24) - 1)
 
 static grub_err_t
 grub_tpm_parse_pcr_index (const char *word, const char **end_ret, unsigned int *index)
@@ -259,6 +263,10 @@ grub_tpm_record_pcrs (grub_extcmd_context_t ctxt, int argc, char **args)
   grub_size_t size = 0;
   int n, rv = 1;
 
+  /* To prevent error: unable to read PCR from TPM, if no TPM device available */
+  if (!grub_tpm_present())
+    return GRUB_ERR_NONE;
+
   if (argc == 0)
     pcr_bitmask = GRUB2_PCR_BITMASK_DEFAULT;
   else
@@ -286,6 +294,18 @@ out:
     grub_free (buffer);
   return rv;
 }
+
+#else
+
+static grub_err_t
+grub_tpm_record_pcrs (grub_extcmd_context_t ctxt __attribute__((unused)),
+    int argc __attribute__((unused)),
+    char **args __attribute__((unused)))
+{
+  return GRUB_ERR_NONE;
+}
+
+#endif
 
 static grub_extcmd_t cmd;
 
