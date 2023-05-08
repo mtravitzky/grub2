@@ -22,6 +22,8 @@
 #include <grub/types.h>
 #include <grub/efi/pe32.h>
 
+#define GRUB_LINUX_ARM64_MAGIC_SIGNATURE 0x644d5241 /* 'ARM\x64' */
+
 struct grub_arm64_linux_pe_header
 {
   grub_uint32_t magic;
@@ -30,6 +32,7 @@ struct grub_arm64_linux_pe_header
 };
 
 #if defined(__aarch64__)
+# define GRUB_LINUX_ARMXX_MAGIC_SIGNATURE GRUB_LINUX_ARM64_MAGIC_SIGNATURE
 # define GRUB_PE32_PEXX_MAGIC GRUB_PE32_PE64_MAGIC
 # define grub_armxx_linux_pe_header grub_arm64_linux_pe_header
 #endif
