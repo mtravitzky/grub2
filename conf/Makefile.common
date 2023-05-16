@@ -30,7 +30,6 @@ CPPFLAGS_DEFAULT += -I$(top_builddir)
 CPPFLAGS_DEFAULT += -I$(top_srcdir)
 CPPFLAGS_DEFAULT += -I$(top_srcdir)/include
 CPPFLAGS_DEFAULT += -I$(top_builddir)/include
-CPPFLAGS_DEFAULT += -I$(top_srcdir)/grub-core/lib/libgcrypt-grub/src/
 CCASFLAGS_DEFAULT = $(CPPFLAGS_DEFAULT) -DASM_FILE=1
 BUILD_CPPFLAGS += $(CPPFLAGS_DEFAULT)
 
@@ -72,7 +71,7 @@ CFLAGS_POSIX = -fno-builtin
 CPPFLAGS_POSIX = -I$(top_srcdir)/grub-core/lib/posix_wrap
 
 CFLAGS_GCRY = -Wno-error -Wno-missing-field-initializers -Wno-redundant-decls -Wno-undef $(CFLAGS_POSIX)
-CPPFLAGS_GCRY = -I$(top_srcdir)/grub-core/lib/libgcrypt_wrap $(CPPFLAGS_POSIX) -D_GCRYPT_IN_LIBGCRYPT=1 -I$(top_srcdir)/include/grub/gcrypt
+CPPFLAGS_GCRY = -I$(top_srcdir)/grub-core/lib/libgcrypt-grub/src -I$(top_srcdir)/grub-core/lib/libgcrypt_wrap $(CPPFLAGS_POSIX) -D_GCRYPT_IN_LIBGCRYPT=1 -I$(top_srcdir)/include/grub/gcrypt
 
 CPPFLAGS_EFIEMU = -I$(top_srcdir)/grub-core/efiemu/runtime
 

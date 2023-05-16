@@ -945,7 +945,7 @@ module = {
   name = pgp;
   common = commands/pgp.c;
   cflags = '$(CFLAGS_POSIX)';
-  cppflags = '-I$(srcdir)/lib/posix_wrap';
+  cppflags = '-I$(srcdir)/lib/libgcrypt-grub/src -I$(srcdir)/lib/posix_wrap';
 };
 
 module = {
@@ -965,7 +965,7 @@ module = {
 
   // posix wrapper required for gcry to get sys/types.h
   cflags = '$(CFLAGS_POSIX)';
-  cppflags = '-I$(srcdir)/lib/posix_wrap';
+  cppflags = '-I$(srcdir)/lib/libgcrypt-grub/src -I$(srcdir)/lib/posix_wrap';
 };
 
 module = {
