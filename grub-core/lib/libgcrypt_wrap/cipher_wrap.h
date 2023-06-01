@@ -23,7 +23,12 @@
 #include <grub/mm.h>
 #include <grub/misc.h>
 #include <grub/dl.h>
+#ifdef _GCRYPT110
+#include <grub/crypto110.h>
+#else
 #include <grub/crypto.h>
+#endif
+
 
 #include <sys/types.h>
 

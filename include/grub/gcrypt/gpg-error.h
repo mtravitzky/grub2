@@ -1,7 +1,12 @@
 #ifndef GRUB_GPG_ERROR_H
 #define GRUB_GPG_ERROR_H 1
 
+#ifdef _GCRYPT110
+#include <grub/crypto110.h>
+#else
 #include <grub/crypto.h>
+#endif
+
 typedef enum
   {
     GPG_ERR_SOURCE_USER_1

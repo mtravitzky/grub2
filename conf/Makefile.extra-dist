@@ -4,6 +4,7 @@ EXTRA_DIST += geninit.sh
 EXTRA_DIST += gentpl.py
 EXTRA_DIST += Makefile.util.def
 EXTRA_DIST += Makefile.utilgcry.def
+EXTRA_DIST += Makefile.utilargon2.def
 
 EXTRA_DIST += asm-tests
 EXTRA_DIST += unicode
@@ -20,6 +21,7 @@ EXTRA_DIST += conf/i386-cygwin-img-ld.sc
 
 EXTRA_DIST += grub-core/Makefile.core.def
 EXTRA_DIST += grub-core/Makefile.gcry.def
+EXTRA_DIST += grub-core/Makefile.argon2.def
 
 EXTRA_DIST += grub-core/genmoddep.awk
 EXTRA_DIST += grub-core/genmod.sh.in

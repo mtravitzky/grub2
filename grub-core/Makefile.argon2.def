@@ -1,0 +1,9 @@
+AutoGen definitions Makefile.tpl;
+
+module = {
+  name = gcry_blake2;
+  common = lib/libgcrypt-argon2/cipher/blake2.c;
+  cflags = '$(CFLAGS_GCRY)';
+  cppflags = '$(CPPFLAGS_ARGON2)';
+};
+
