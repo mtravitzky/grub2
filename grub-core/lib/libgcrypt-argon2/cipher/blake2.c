@@ -22,9 +22,6 @@
  * Copyright 2012, Samuel Neves <sneves@dei.uc.pt>
  */
 
-#include <grub/dl.h>
-GRUB_MOD_LICENSE ("GPLv3+");
-
 #include "g10lib.h"
 #include "bithelp.h"
 #include "cipher.h"

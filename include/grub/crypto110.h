@@ -65,6 +65,8 @@ typedef enum
     GPG_ERR_WRONG_PUBKEY_ALGO,
     GPG_ERR_OUT_OF_MEMORY,
     GPG_ERR_TOO_LARGE,
+    GPG_ERR_CANCELED,
+    GPG_ERR_UNKNOWN_ALGORITHM,
     GPG_ERR_ENOMEM
   } gpg_err_code_t;
 typedef gpg_err_code_t gpg_error_t;

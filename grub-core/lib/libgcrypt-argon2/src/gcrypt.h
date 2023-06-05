@@ -1511,7 +1511,17 @@ enum gcry_kdf_algos
     GCRY_KDF_SALTED_S2K = 17,
     GCRY_KDF_ITERSALTED_S2K = 19,
     GCRY_KDF_PBKDF1 = 33,
-    GCRY_KDF_PBKDF2 = 34
+    GCRY_KDF_PBKDF2 = 34,
+    GCRY_KDF_SCRYPT = 48,
+    GCRY_KDF_ARGON2   = 64,
+    GCRY_KDF_BALLOON  = 65
+  };
+
+enum gcry_kdf_subalgo_argon2
+  {
+    GCRY_KDF_ARGON2D  = 0,
+    GCRY_KDF_ARGON2I  = 1,
+    GCRY_KDF_ARGON2ID = 2
   };
 
 /* Derive a key from a passphrase.  */
@@ -1521,7 +1531,33 @@ gpg_error_t gcry_kdf_derive (const void *passphrase, size_t passphraselen,
                              unsigned long iterations,
                              size_t keysize, void *keybuffer);
 
+/* Another API to derive a key from a passphrase.  */
+typedef struct gcry_kdf_handle *gcry_kdf_hd_t;
 
+typedef void (*gcry_kdf_job_fn_t) (void *priv);
+typedef int (*gcry_kdf_dispatch_job_fn_t) (void *jobs_context,
+                                           gcry_kdf_job_fn_t job_fn,
+                                           void *job_priv);
+typedef int (*gcry_kdf_wait_all_jobs_fn_t) (void *jobs_context);
+
+/* Exposed structure for KDF computation to decouple thread functionality.  */
+typedef struct gcry_kdf_thread_ops
+{
+  void *jobs_context;
+  gcry_kdf_dispatch_job_fn_t dispatch_job;
+  gcry_kdf_wait_all_jobs_fn_t wait_all_jobs;
+} gcry_kdf_thread_ops_t;
+
+gcry_error_t gcry_kdf_open (gcry_kdf_hd_t *hd, int algo, int subalgo,
+                            const unsigned long *param, unsigned int paramlen,
+                            const void *passphrase, size_t passphraselen,
+                            const void *salt, size_t saltlen,
+                            const void *key, size_t keylen,
+                            const void *ad, size_t adlen);
+gcry_error_t gcry_kdf_compute (gcry_kdf_hd_t h,
+                               const gcry_kdf_thread_ops_t *ops);
+gcry_error_t gcry_kdf_final (gcry_kdf_hd_t h, size_t resultlen, void *result);
+void gcry_kdf_close (gcry_kdf_hd_t h);
 
 
 /************************************

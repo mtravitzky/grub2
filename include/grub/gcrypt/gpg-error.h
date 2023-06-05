@@ -34,4 +34,15 @@ gpg_err_source (gpg_error_t err __attribute__ ((unused)))
 gcry_err_code_t
 gpg_error_from_syserror (void);
 
+/* Retrieve the error code for the system error ERR.  This returns
+ * GPG_ERR_UNKNOWN_ERRNO if the system error is not mapped (report
+ * this). */
+static inline gpg_err_code_t
+gpg_err_code_from_errno (int err)
+{
+  (void)err;
+  return GPG_ERR_OUT_OF_MEMORY;
+}
+
+
 #endif
