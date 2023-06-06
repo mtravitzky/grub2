@@ -301,6 +301,22 @@ program = {
 };
 
 program = {
+  name = grub-mkpasswd-argon2;
+
+  common = util/grub-mkpasswd-argon2.c;
+  common = grub-core/kern/emu/argp_common.c;
+  common = grub-core/osdep/random.c;
+  common = grub-core/osdep/init.c;
+
+  ldadd = libgrubmods.a;
+  ldadd = libgrubgcry.a;
+  ldadd = libgrubkern.a;
+  ldadd = libargon2.a;
+  ldadd = grub-core/lib/gnulib/libgnu.a;
+  ldadd = '$(LIBINTL) $(LIBDEVMAPPER) $(LIBZFS) $(LIBNVPAIR) $(LIBGEOM)';
+};
+
+program = {
   name = grub-macho2img;
   mansection = 1;
   common = util/grub-macho2img.c;

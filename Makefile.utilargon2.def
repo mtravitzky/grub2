@@ -7,4 +7,6 @@ library = {
 
   common = grub-core/lib/libgcrypt-argon2/cipher/blake2.c;
   common = grub-core/lib/libgcrypt-argon2/cipher/kdf.c;
+  common = grub-core/lib/libgcrypt_wrap/mem.c;
+  common = grub-core/lib/crypto.c;
 };
