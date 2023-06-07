@@ -26,6 +26,7 @@
 #include <grub/crypto.h>
 #include <grub/partition.h>
 #include <grub/i18n.h>
+#include <grub/gcry/argon2.h>
 
 #include <base64.h>
 #include <json.h>
@@ -436,6 +437,8 @@ luks2_decrypt_key (grub_uint8_t *out_key,
   const gcry_md_spec_t *hash;
   gcry_err_code_t gcry_ret;
   grub_err_t ret;
+  gcry_error_t err;
+  unsigned long param[4] = {k->area.key_size, k->kdf.u.argon2.time, k->kdf.u.argon2.memory, k->kdf.u.argon2.cpus};
 
   if (!base64_decode (k->kdf.salt, grub_strlen (k->kdf.salt),
 		     (char *)salt, &saltlen))
@@ -444,13 +447,30 @@ luks2_decrypt_key (grub_uint8_t *out_key,
       goto err;
     }
 
+
   /* Calculate the binary area key of the user supplied passphrase. */
   switch (k->kdf.type)
     {
       case LUKS2_KDF_TYPE_ARGON2I:
+	err = my_kdf_derive (GRUB_GCRY_KDF_ARGON2, GRUB_GCRY_KDF_ARGON2I, param, 4,
+                       passphrase, passphraselen, salt, saltlen, NULL, 0, NULL, 0,
+                       param[0], area_key);
+	if (err)
+	  {
+	    ret = grub_crypto_gcry_error (err);
+	    goto err;
+	  }
+	break;
       case LUKS2_KDF_TYPE_ARGON2ID:
-	ret = grub_error (GRUB_ERR_BAD_ARGUMENT, "Argon2 not supported");
-	goto err;
+	err = my_kdf_derive (GRUB_GCRY_KDF_ARGON2, GRUB_GCRY_KDF_ARGON2ID, param, 4,
+                       passphrase, passphraselen, salt, saltlen, NULL, 0, NULL, 0,
+                       param[0], area_key);
+	if (err)
+	  {
+	    ret = grub_crypto_gcry_error (err);
+	    goto err;
+	  }
+	break;
       case LUKS2_KDF_TYPE_PBKDF2:
 	hash = grub_crypto_lookup_md_by_name (k->kdf.u.pbkdf2.hash);
 	if (!hash)

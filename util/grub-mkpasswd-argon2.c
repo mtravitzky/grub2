@@ -25,6 +25,7 @@
 #include <grub/util/misc.h>
 #include <grub/i18n.h>
 #include <grub/misc.h>
+#include <grub/gcry/argon2.h>
 
 #include <unistd.h>
 #include <stdio.h>
@@ -46,92 +47,6 @@
  *  Key Derivation Functions  *
  *                            *
  ******************************/
-
-/* Algorithm IDs for the KDFs.  */
-enum gcry_kdf_algos
-  {
-    GCRY_KDF_NONE = 0,
-    GCRY_KDF_SIMPLE_S2K = 16,
-    GCRY_KDF_SALTED_S2K = 17,
-    GCRY_KDF_ITERSALTED_S2K = 19,
-    GCRY_KDF_PBKDF1 = 33,
-    GCRY_KDF_PBKDF2 = 34,
-    GCRY_KDF_SCRYPT = 48,
-    GCRY_KDF_ARGON2   = 64,
-    GCRY_KDF_BALLOON  = 65
-  };
-
-enum gcry_kdf_subalgo_argon2
-  {
-    GCRY_KDF_ARGON2D  = 0,
-    GCRY_KDF_ARGON2I  = 1,
-    GCRY_KDF_ARGON2ID = 2
-  };
-
-/* Derive a key from a passphrase.  */
-gpg_error_t gcry_kdf_derive (const void *passphrase, size_t passphraselen,
-                             int algo, int subalgo,
-                             const void *salt, size_t saltlen,
-                             unsigned long iterations,
-                             size_t keysize, void *keybuffer);
-
-/* Another API to derive a key from a passphrase.  */
-typedef struct gcry_kdf_handle *gcry_kdf_hd_t;
-
-typedef void (*gcry_kdf_job_fn_t) (void *priv);
-typedef int (*gcry_kdf_dispatch_job_fn_t) (void *jobs_context,
-                                           gcry_kdf_job_fn_t job_fn,
-                                           void *job_priv);
-typedef int (*gcry_kdf_wait_all_jobs_fn_t) (void *jobs_context);
-
-/* Exposed structure for KDF computation to decouple thread functionality.  */
-typedef struct gcry_kdf_thread_ops
-{
-  void *jobs_context;
-  gcry_kdf_dispatch_job_fn_t dispatch_job;
-  gcry_kdf_wait_all_jobs_fn_t wait_all_jobs;
-} gcry_kdf_thread_ops_t;
-
-gcry_error_t gcry_kdf_open (gcry_kdf_hd_t *hd, int algo, int subalgo,
-                            const unsigned long *param, unsigned int paramlen,
-                            const void *passphrase, size_t passphraselen,
-                            const void *salt, size_t saltlen,
-                            const void *key, size_t keylen,
-                            const void *ad, size_t adlen);
-gcry_error_t gcry_kdf_compute (gcry_kdf_hd_t h,
-                               const gcry_kdf_thread_ops_t *ops);
-gcry_error_t gcry_kdf_final (gcry_kdf_hd_t h, size_t resultlen, void *result);
-void gcry_kdf_close (gcry_kdf_hd_t h);
-
-static gcry_error_t
-my_kdf_derive (int parallel,
-               int algo, int subalgo,
-               const unsigned long *params, unsigned int paramslen,
-               const unsigned char *pass, size_t passlen,
-               const unsigned char *salt, size_t saltlen,
-               const unsigned char *key, size_t keylen,
-               const unsigned char *ad, size_t adlen,
-               size_t outlen, unsigned char *out)
-{
-  gcry_error_t err;
-  gcry_kdf_hd_t hd;
-
-  (void)parallel;
-
-  err = gcry_kdf_open (&hd, algo, subalgo, params, paramslen,
-                       pass, passlen, salt, saltlen, key, keylen,
-                       ad, adlen);
-  if (err)
-    return err;
-
-  err = gcry_kdf_compute (hd, NULL);
-
-  if (!err)
-    err = gcry_kdf_final (hd, outlen, out);
-
-  gcry_kdf_close (hd);
-  return err;
-}
 
 static void
 check_argon2 (void)
@@ -170,7 +85,7 @@ check_argon2 (void)
     }
   };
   int i;
-  int subalgo = GCRY_KDF_ARGON2D;
+  int subalgo = GRUB_GCRY_KDF_ARGON2D;
   int count = 0;
 
  again:
@@ -178,8 +93,7 @@ check_argon2 (void)
   if (verbose)
     fprintf (stderr, "checking ARGON2 test vector %d\n", count);
 
-  err = my_kdf_derive (0,
-                       GCRY_KDF_ARGON2, subalgo, param, 4,
+  err = my_kdf_derive (GRUB_GCRY_KDF_ARGON2, subalgo, param, 4,
                        pass, 32, salt, 16, key, 8, ad, 12,
                        32, out);
   if (err)
@@ -194,10 +108,10 @@ check_argon2 (void)
     }
 
   /* Next algo */
-  if (subalgo == GCRY_KDF_ARGON2D)
-    subalgo = GCRY_KDF_ARGON2I;
-  else if (subalgo == GCRY_KDF_ARGON2I)
-    subalgo = GCRY_KDF_ARGON2ID;
+  if (subalgo == GRUB_GCRY_KDF_ARGON2D)
+    subalgo = GRUB_GCRY_KDF_ARGON2I;
+  else if (subalgo == GRUB_GCRY_KDF_ARGON2I)
+    subalgo = GRUB_GCRY_KDF_ARGON2ID;
 
   count++;
   if (count < 3)

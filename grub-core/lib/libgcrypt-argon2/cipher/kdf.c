@@ -26,6 +26,7 @@ GRUB_MOD_LICENSE ("GPLv3+");
 #define xfree(a)         gcry_free ((a))
 #include "cipher.h"
 #include "kdf-internal.h"
+#include <grub/gcry/argon2.h>
 
 extern gcry_md_spec_t _gcry_digest_spec_blake2b_512;
 
@@ -729,4 +730,31 @@ gcry_kdf_close (gcry_kdf_hd_t h)
     default:
       break;
     }
+}
+
+gcry_error_t
+my_kdf_derive (int algo, int subalgo,
+               const unsigned long *params, unsigned int paramslen,
+               const unsigned char *pass, grub_size_t passlen,
+               const unsigned char *salt, grub_size_t saltlen,
+               const unsigned char *key, grub_size_t keylen,
+               const unsigned char *ad, grub_size_t adlen,
+               grub_size_t outlen, unsigned char *out)
+{
+  gcry_error_t err;
+  gcry_kdf_hd_t hd;
+
+  err = gcry_kdf_open (&hd, algo, subalgo, params, paramslen,
+                       pass, passlen, salt, saltlen, key, keylen,
+                       ad, adlen);
+  if (err)
+    return err;
+
+  err = gcry_kdf_compute (hd, NULL);
+
+  if (!err)
+    err = gcry_kdf_final (hd, outlen, out);
+
+  gcry_kdf_close (hd);
+  return err;
 }
