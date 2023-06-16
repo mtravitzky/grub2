@@ -201,7 +201,8 @@ populate_menu()
 }
 
 # Make BLS the default if GRUB_ENABLE_BLSCFG was not set and grubby is not installed.
-if [ -z "${GRUB_ENABLE_BLSCFG}" ] && ! command -v new-kernel-pkg >/dev/null; then
+# FIXME: The test should be aligned to openSUSE, grubby is not our default tool  
+if [ -z "${GRUB_ENABLE_BLSCFG}" ] && ! command -v new-kernel-pkg >/dev/null && false; then
 	  GRUB_ENABLE_BLSCFG="true"
 fi
 

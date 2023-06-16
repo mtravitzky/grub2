@@ -1186,6 +1186,7 @@ grub_cmd_blscfg (grub_extcmd_context_t ctxt UNUSED,
   char *entry_id = NULL;
   bool show_default = true;
   bool show_non_default = true;
+  const char *boot = NULL;
 
   if (argc == 1) {
     if (grub_strcmp (args[0], "default") == 0) {
@@ -1204,6 +1205,15 @@ grub_cmd_blscfg (grub_extcmd_context_t ctxt UNUSED,
   r = bls_load_entries(path);
   if (r)
     return r;
+
+  boot = grub_env_get("boot");
+  path = (boot) ? grub_xasprintf("(%s)" GRUB_BLS_CONFIG_PATH, boot) : NULL;
+  if (path)
+    {
+      bls_load_entries(path);
+      grub_print_error();
+    }
+  grub_free(path);
 
   return bls_create_entries(show_default, show_non_default, entry_id);
 }
