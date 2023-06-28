@@ -28,6 +28,7 @@ struct bls_entry
   int nkeyvals;
   char *filename;
   int visible;
+  const char *devid;
 };
 
 struct grub_menu_entry_class
