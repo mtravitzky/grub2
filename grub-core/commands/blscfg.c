@@ -55,15 +55,18 @@ struct keyval
 
 static struct bls_entry *entries = NULL;
 
-/* Cache probing in frob_boot_device().  Used for linux entry also.
- * Always true in non-emu, meaning to prefix things with GRUB_BOOT_DEVICE. */
-static int separate_boot = -1;
-
 #define FOR_BLS_ENTRIES(var) FOR_LIST_ELEMENTS (var, entries)
 
 /* BLS appears to make paths relative to the filesystem that snippets are
  * on, not /.  Attempt to cope. */
-static char *frob_boot_device(char *tmp)
+#ifdef GRUB_MACHINE_EMU
+/* Cache probing in frob_boot_device().  Used for linux entry also.
+ * Unused in non-emu, meaning to prefix things with device of parent blsdir. */
+static int separate_boot = -1;
+static char *frob_boot_device(char *tmp, const char *bootdev UNUSED)
+#else
+static char *frob_boot_device(char *tmp, const char *bootdev)
+#endif
 {
 #ifdef GRUB_MACHINE_EMU
   grub_file_t f;
@@ -94,9 +97,11 @@ static char *frob_boot_device(char *tmp)
  probed:
   if (!separate_boot)
     return grub_stpcpy (tmp, " ");
-#endif
-
   return grub_stpcpy (tmp, " " GRUB_BOOT_DEVICE);
+#else
+  tmp = grub_stpcpy (tmp, " ");
+  return grub_stpcpy (tmp, bootdev);
+#endif
 }
 
 static int bls_add_keyval(struct bls_entry *entry, char *key, char *val)
@@ -568,6 +573,9 @@ static int read_entry (
       if (rc < 0)
 	break;
     }
+  
+    if (info->devid)
+      entry->devid = grub_strdup(info->devid);
 
     if (!rc)
       bls_add_entry(entry);
@@ -772,6 +780,7 @@ static void create_entry (struct bls_entry *entry)
   char *id = entry->filename;
   char *dotconf = id;
   char *hotkey = NULL;
+  char *bootdev = entry->devid ? grub_xasprintf("(%s)", entry->devid) : grub_strdup (GRUB_BOOT_DEVICE);
 
   char *users = NULL;
   char **classes = NULL;
@@ -865,12 +874,12 @@ static void create_entry (struct bls_entry *entry)
       char *tmp;
 
       for (i = 0; early_initrds != NULL && early_initrds[i] != NULL; i++)
-	initrd_size += sizeof (" " GRUB_BOOT_DEVICE) \
+	initrd_size += sizeof (" ") + grub_strlen (bootdev) \
 		       + grub_strlen(initrd_prefix)  \
 		       + grub_strlen (early_initrds[i]) + 1;
 
       for (i = 0; initrds != NULL && initrds[i] != NULL; i++)
-	initrd_size += sizeof (" " GRUB_BOOT_DEVICE) \
+	initrd_size += sizeof (" ") + grub_strlen (bootdev) \
 		       + grub_strlen (initrds[i]) + 1;
       initrd_size += 1;
 
@@ -885,7 +894,7 @@ static void create_entry (struct bls_entry *entry)
       for (i = 0; early_initrds != NULL && early_initrds[i] != NULL; i++)
 	{
 	  grub_dprintf ("blscfg", "adding early initrd %s\n", early_initrds[i]);
-	  tmp = frob_boot_device (tmp);
+	  tmp = frob_boot_device (tmp, bootdev);
 	  tmp = grub_stpcpy (tmp, initrd_prefix);
 	  tmp = grub_stpcpy (tmp, early_initrds[i]);
 	  grub_free(early_initrds[i]);
@@ -894,7 +903,7 @@ static void create_entry (struct bls_entry *entry)
       for (i = 0; initrds != NULL && initrds[i] != NULL; i++)
 	{
 	  grub_dprintf ("blscfg", "adding initrd %s\n", initrds[i]);
-	  tmp = frob_boot_device (tmp);
+	  tmp = frob_boot_device (tmp, bootdev);
 	  tmp = grub_stpcpy (tmp, initrds[i]);
 	}
       tmp = grub_stpcpy (tmp, "\n");
@@ -916,7 +925,7 @@ static void create_entry (struct bls_entry *entry)
 	    }
 	}
 
-      dt_size = sizeof("devicetree " GRUB_BOOT_DEVICE) + grub_strlen(devicetree) + 1;
+      dt_size = sizeof("devicetree ") + grub_strlen(bootdev) + grub_strlen(devicetree) + 1;
 
       if (add_dt_prefix)
 	{
@@ -931,7 +940,7 @@ static void create_entry (struct bls_entry *entry)
         }
       char *tmp = dt;
       tmp = grub_stpcpy (dt, "devicetree");
-      tmp = frob_boot_device (tmp);
+      tmp = frob_boot_device (tmp, bootdev);
       if (add_dt_prefix)
         tmp = grub_stpcpy (tmp, prefix);
       tmp = grub_stpcpy (tmp, devicetree);
@@ -950,7 +959,11 @@ static void create_entry (struct bls_entry *entry)
 			"linux %s%s%s%s\n"
 			"%s%s",
 			savedefault ? "savedefault\n" : "",
+#ifdef GRUB_MACHINE_EMU
 			separate_boot ? GRUB_BOOT_DEVICE : "",
+#else
+			bootdev,
+#endif
 			clinux, options ? " " : "", options ? options : "",
 			initrd ? initrd : "", dt ? dt : "");
 
@@ -969,6 +982,7 @@ finish:
   grub_free (args);
   grub_free (argv);
   grub_free (src);
+  grub_free (bootdev);
 }
 
 struct find_entry_info {
