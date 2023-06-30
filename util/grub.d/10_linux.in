@@ -273,7 +273,6 @@ EOF
 
 insmod blscfg
 blscfg
-blscfg (\$boot)/loader/entries
 EOF
   fi
 
