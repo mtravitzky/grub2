@@ -24,6 +24,9 @@
 #include <grub/ieee1275/ofdisk.h>
 #include <grub/i18n.h>
 #include <grub/time.h>
+#include <grub/env.h>
+
+#define RETRY_DEFAULT_TIMEOUT 15
 
 static char *last_devpath;
 static grub_ieee1275_ihandle_t last_ihandle;
@@ -783,7 +786,7 @@ compute_dev_path (const char *name)
 }
 
 static grub_err_t
-grub_ofdisk_open (const char *name, grub_disk_t disk)
+grub_ofdisk_open_real (const char *name, grub_disk_t disk)
 {
   grub_ieee1275_phandle_t dev;
   char *devpath;
@@ -879,6 +882,56 @@ grub_ofdisk_open (const char *name, grub_disk_t disk)
   return 0;
 }
 
+static grub_uint64_t
+grub_ofdisk_disk_timeout (grub_disk_t disk)
+{
+  grub_uint64_t retry;
+  const char *timeout = grub_env_get ("ofdisk_retry_timeout");
+
+  if (!(grub_strstr (disk->name, "fibre-channel@") ||
+      grub_strstr (disk->name, "vfc-client")) ||
+      grub_strstr(disk->name, "nvme-of"))
+    {
+      /* Do not retry in case of non network drives */
+      return 0;
+    }
+
+  if (timeout != NULL)
+    {
+       retry = grub_strtoul (timeout, 0, 10);
+       if (grub_errno != GRUB_ERR_NONE)
+         {
+           grub_errno = GRUB_ERR_NONE;
+           return RETRY_DEFAULT_TIMEOUT;
+         }
+       if (retry)
+         return retry;
+    }
+  return RETRY_DEFAULT_TIMEOUT;
+}
+
+static grub_err_t
+grub_ofdisk_open (const char *name, grub_disk_t disk)
+{
+  grub_err_t err;
+  grub_uint64_t timeout = grub_get_time_ms () + (grub_ofdisk_disk_timeout (disk) * 1000);
+  _Bool cont;
+  do
+    {
+      err = grub_ofdisk_open_real (name, disk);
+      cont = grub_get_time_ms () < timeout;
+      if (err == GRUB_ERR_UNKNOWN_DEVICE && cont)
+        {
+          grub_dprintf ("ofdisk","Failed to open disk %s. Retrying...\n", name);
+          grub_errno = GRUB_ERR_NONE;
+        }
+      else
+          break;
+      grub_millisleep (1000);
+    } while (cont);
+  return err;
+}
+
 static void
 grub_ofdisk_close (grub_disk_t disk)
 {
@@ -915,7 +968,7 @@ grub_ofdisk_prepare (grub_disk_t disk, grub_disk_addr_t sector)
 }
 
 static grub_err_t
-grub_ofdisk_read (grub_disk_t disk, grub_disk_addr_t sector,
+grub_ofdisk_read_real (grub_disk_t disk, grub_disk_addr_t sector,
 		  grub_size_t size, char *buf)
 {
   grub_err_t err;
@@ -932,6 +985,29 @@ grub_ofdisk_read (grub_disk_t disk, grub_disk_addr_t sector,
 		       disk->name);
 
   return 0;
+}
+
+static grub_err_t
+grub_ofdisk_read (grub_disk_t disk, grub_disk_addr_t sector,
+		  grub_size_t size, char *buf)
+{
+  grub_err_t err;
+  grub_uint64_t timeout = grub_get_time_ms () + (grub_ofdisk_disk_timeout (disk) * 1000);
+  _Bool cont;
+  do
+    {
+      err = grub_ofdisk_read_real (disk, sector, size, buf);
+      cont = grub_get_time_ms () < timeout;
+      if (err == GRUB_ERR_UNKNOWN_DEVICE && cont)
+        {
+          grub_dprintf ("ofdisk","Failed to read disk %s. Retrying...\n", (char*)disk->data);
+          grub_errno = GRUB_ERR_NONE;
+        }
+      else
+          break;
+      grub_millisleep (1000);
+     } while (cont);
+  return err;
 }
 
 static grub_err_t
