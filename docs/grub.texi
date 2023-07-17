@@ -3315,6 +3315,7 @@ These variables have special meaning to GRUB.
 * net_default_ip::
 * net_default_mac::
 * net_default_server::
+* ofdisk_retry_timeout::
 * pager::
 * prefix::
 * pxe_blksize::
@@ -3742,6 +3743,13 @@ The default is the value of @samp{color_normal} (@pxref{color_normal}).
 @subsection net_default_server
 
 @xref{Network}.
+
+
+@node ofdisk_retry_timeout
+@subsection ofdisk_retry_timeout
+
+The time in seconds till which the grub will retry to open or read a disk in
+case of failure to do so. This value defaults to 15 seconds.
 
 
 @node pager
