@@ -290,8 +290,26 @@ probe_cryptodisk_uuid (grub_disk_t disk, char delim)
     }
   if (disk->dev->id == GRUB_DISK_DEVICE_CRYPTODISK_ID)
     {
+      grub_size_t i, j;
       const char *uu = grub_util_cryptodisk_get_uuid (disk);
-      grub_printf ("%s%c", uu, delim);
+      grub_size_t len = grub_strlen (uu);
+      char *p = grub_malloc (len + 1);
+
+      /* Removing dash in the UUID string
+       * This keeps old grub binary to work with newer config in a system,
+       * especially for snapshots. It is a temporary change to make sure smooth
+       * transition from 2.06 to 2.12-rc1 and this hunk can be removed
+       * after 2.12-rc1 release stablized.
+       */
+      for (i = 0, j = 0; i < len; i++)
+        {
+          if (uu[i] != '-')
+            p[j++] = uu[i];
+        }
+      p[j] = '\0';
+
+      grub_printf ("%s%c", p, delim);
+      grub_free (p);
     }
 }
 
