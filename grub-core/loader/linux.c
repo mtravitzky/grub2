@@ -209,13 +209,6 @@ grub_initrd_component (const char *buf, int bufsz, const char *newc_name,
 		&initrd_ctx->size))
     goto overflow;
 
-  initrd_ctx->size = ALIGN_UP (initrd_ctx->size, 4);
-  if (grub_add (initrd_ctx->size,
-		ALIGN_UP (sizeof (struct newc_head)
-			  + sizeof ("TRAILER!!!") - 1, 4),
-		&initrd_ctx->size))
-    goto overflow;
-
   free_dir (root);
   root = 0;
   return GRUB_ERR_NONE;
@@ -312,6 +305,13 @@ grub_initrd_init (int argc, char *argv[],
 	goto overflow;
     }
 
+  FOR_LIST_ELEMENTS (pk, kpuber)
+    if (pk->key && pk->path)
+      {
+	grub_initrd_component (pk->key, pk->key_len, pk->path, initrd_ctx);
+	newc = 1;
+      }
+
   if (newc)
     {
       initrd_ctx->size = ALIGN_UP (initrd_ctx->size, 4);
@@ -323,10 +323,6 @@ grub_initrd_init (int argc, char *argv[],
       free_dir (root);
       root = 0;
     }
-
-  FOR_LIST_ELEMENTS (pk, kpuber)
-    if (pk->key && pk->path)
-      grub_initrd_component (pk->key, pk->key_len, pk->path, initrd_ctx);
 
   return GRUB_ERR_NONE;
 
@@ -404,10 +400,7 @@ grub_initrd_load (struct grub_linux_initrd_context *initrd_ctx,
 
       cursize = initrd_ctx->components[i].size;
       if (initrd_ctx->components[i].buf)
-	{
-	  grub_memcpy (ptr, initrd_ctx->components[i].buf, cursize);
-	  newc = 1;
-	}
+        grub_memcpy (ptr, initrd_ctx->components[i].buf, cursize);
       else if (grub_file_read (initrd_ctx->components[i].file, ptr, cursize)
 	  != cursize)
 	{
