@@ -9,16 +9,19 @@
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
-struct grub_key_publisher *kpuber;
+grub_crypto_key_list_t *cryptokey_lst;
 
 grub_err_t
-grub_initrd_publish_key (const char *uuid, const char *key, grub_size_t key_len, const char *path)
+grub_cryptokey_add_or_update (const char *uuid, const char *key, grub_size_t key_len, const char *path, int is_tpmkey)
 {
-  struct grub_key_publisher *cur = NULL;
+  grub_crypto_key_list_t *cur = NULL;
 
-  FOR_LIST_ELEMENTS (cur, kpuber)
+  FOR_LIST_ELEMENTS (cur, cryptokey_lst)
     if (grub_uuidcasecmp (cur->name, uuid, sizeof (cur->name)) == 0)
       break;
+
+  if (!cur && !uuid)
+    return GRUB_ERR_NONE;
 
   if (!cur)
     cur = grub_zalloc (sizeof (*cur));
@@ -44,21 +47,24 @@ grub_initrd_publish_key (const char *uuid, const char *key, grub_size_t key_len,
       cur->path = grub_strdup (path);
     }
 
+  if (is_tpmkey >= 0)
+    cur->is_tpmkey = is_tpmkey;
+
   if (!cur->name)
     {
       cur->name = grub_strdup (uuid);
-      grub_list_push (GRUB_AS_LIST_P (&kpuber), GRUB_AS_LIST (cur));
+      grub_list_push (GRUB_AS_LIST_P (&cryptokey_lst), GRUB_AS_LIST (cur));
     }
 
   return GRUB_ERR_NONE;
 }
 
 void
-grub_initrd_discard_key (void)
+grub_cryptokey_discard (void)
 {
-  struct grub_key_publisher *cur, *nxt;
+  grub_crypto_key_list_t *cur, *nxt;
 
-  FOR_LIST_ELEMENTS_SAFE (cur, nxt, kpuber)
+  FOR_LIST_ELEMENTS_SAFE (cur, nxt, cryptokey_lst)
 	{
 	  grub_list_remove (GRUB_AS_LIST (cur));
 	  grub_memset (cur->key, 0, cur->key_len);
@@ -67,6 +73,20 @@ grub_initrd_discard_key (void)
 	  grub_free (cur->key);
 	  grub_free (cur);
 	}
+}
+
+void
+grub_cryptokey_tpmkey_discard (void)
+{
+  grub_crypto_key_list_t *cur = NULL;
+
+  FOR_LIST_ELEMENTS (cur, cryptokey_lst)
+    if (cur->is_tpmkey)
+      break;
+
+  /* Discard all keys if any of them is tpm */
+  if (cur)
+    grub_cryptokey_discard();
 }
 
 static grub_err_t
@@ -92,7 +112,7 @@ grub_cmd_crypttab_entry (grub_command_t cmd __attribute__ ((unused)),
     }
 
   /*FIXME: Validate UUID string*/
-  return grub_initrd_publish_key (argv[1], NULL, 0, path);
+  return grub_cryptokey_add_or_update (argv[1], NULL, 0, path, -1);
 }
 
 static grub_command_t cmd;

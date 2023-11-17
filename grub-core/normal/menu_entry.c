@@ -1263,7 +1263,7 @@ grub_menu_entry_run (grub_menu_entry_t entry)
       return;
     }
 
-  grub_initrd_discard_key();
+  grub_cryptokey_discard();
 
   screen = make_screen (entry);
   if (! screen)
