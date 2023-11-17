@@ -226,13 +226,13 @@ grub_initrd_init (int argc, char *argv[],
   int i;
   int newc = 0;
   struct dir *root = 0;
-  struct grub_key_publisher *pk;
+  grub_crypto_key_list_t *pk;
   int numkey = 0;
 
   initrd_ctx->nfiles = 0;
   initrd_ctx->components = 0;
 
-  FOR_LIST_ELEMENTS (pk, kpuber)
+  FOR_LIST_ELEMENTS (pk, cryptokey_lst)
     if (pk->key && pk->path)
       numkey++;
 
@@ -305,7 +305,7 @@ grub_initrd_init (int argc, char *argv[],
 	goto overflow;
     }
 
-  FOR_LIST_ELEMENTS (pk, kpuber)
+  FOR_LIST_ELEMENTS (pk, cryptokey_lst)
     if (pk->key && pk->path)
       {
 	grub_initrd_component (pk->key, pk->key_len, pk->path, initrd_ctx);

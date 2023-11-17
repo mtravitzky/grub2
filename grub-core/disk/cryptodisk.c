@@ -1071,6 +1071,9 @@ grub_cryptodisk_scan_device_real (const char *name,
   struct cryptodisk_read_hook_ctx read_hook_data = {0};
   int askpass = 0;
   char *part = NULL;
+#ifndef GRUB_UTIL
+  int is_tpmkey = 0;
+#endif
 
   dev = grub_cryptodisk_get_by_source_disk (source);
 
@@ -1183,6 +1186,9 @@ grub_cryptodisk_scan_device_real (const char *name,
 	     ret = grub_cryptodisk_insert (dev, name, source);
 	     if (ret != GRUB_ERR_NONE)
 	       goto error;
+#ifndef GRUB_UTIL
+	     is_tpmkey = 1;
+#endif
 	     goto cleanup;
 	   }
 	}
@@ -1244,7 +1250,7 @@ grub_cryptodisk_scan_device_real (const char *name,
 
 #ifndef GRUB_UTIL
   if (cargs->key_data && dev)
-    grub_initrd_publish_key (dev->uuid, (const char *)cargs->key_data, cargs->key_len, NULL);
+    grub_cryptokey_add_or_update (dev->uuid, (const char *)cargs->key_data, cargs->key_len, NULL, is_tpmkey);
 #endif
   if (askpass)
     {
