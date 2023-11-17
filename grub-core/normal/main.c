@@ -479,7 +479,7 @@ grub_cmdline_run (int nested, int force_auth)
       return;
     }
 
-  grub_initrd_discard_key ();
+  grub_cryptokey_discard ();
   grub_normal_reader_init (nested);
 
   while (1)
