@@ -6,10 +6,38 @@
 #include <grub/mm.h>
 #include <grub/list.h>
 #include <grub/crypttab.h>
+#include <grub/file.h>
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
 grub_crypto_key_list_t *cryptokey_lst;
+
+static grub_file_t
+grub_nocat_open (grub_file_t io, enum grub_file_type type)
+{
+  grub_disk_t disk;
+
+  /* Network device */
+  if (!io->device->disk)
+    return io;
+
+  disk = io->device->disk; 
+
+  if (grub_disk_is_crypto (disk))
+    {
+      switch (type & GRUB_FILE_TYPE_MASK)
+	{
+	  case GRUB_FILE_TYPE_CAT:
+	  case GRUB_FILE_TYPE_HEXCAT:
+	    grub_error (GRUB_ERR_ACCESS_DENIED, N_("prohibited to view encrypted data"));
+	    return NULL;
+	  default:
+	    break;
+	}
+    }
+
+  return io;
+}
 
 grub_err_t
 grub_cryptokey_add_or_update (const char *uuid, const char *key, grub_size_t key_len, const char *path, int is_tpmkey)
@@ -48,7 +76,11 @@ grub_cryptokey_add_or_update (const char *uuid, const char *key, grub_size_t key
     }
 
   if (is_tpmkey >= 0)
-    cur->is_tpmkey = is_tpmkey;
+    {
+      cur->is_tpmkey = is_tpmkey;
+      if (is_tpmkey)
+	grub_file_filter_register (GRUB_FILE_FILTER_NOCAT, grub_nocat_open);
+    }
 
   if (!cur->name)
     {
@@ -121,6 +153,7 @@ GRUB_MOD_INIT(crypttab)
 {
   cmd = grub_register_command ("crypttab_entry", grub_cmd_crypttab_entry,
 			       N_("VOLUME-NAME ENCRYPTED-DEVICE KEY-FILE") , N_("No description"));
+  grub_dl_set_persistent (mod);
 }
 
 GRUB_MOD_FINI(crypttab)

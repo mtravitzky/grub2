@@ -147,6 +147,8 @@ struct grub_disk
 
   /* Device-specific data.  */
   void *data;
+
+  int is_crypto_diskfilter;
 };
 typedef struct grub_disk *grub_disk_t;
 
@@ -316,5 +318,13 @@ void grub_mdraid09_fini (void);
 void grub_mdraid1x_fini (void);
 void grub_diskfilter_fini (void);
 #endif
+
+static inline int
+grub_disk_is_crypto (grub_disk_t disk)
+{
+  return ((disk->is_crypto_diskfilter ||
+	   disk->dev->id == GRUB_DISK_DEVICE_CRYPTODISK_ID) ?
+	  1 : 0);
+}
 
 #endif /* ! GRUB_DISK_HEADER */

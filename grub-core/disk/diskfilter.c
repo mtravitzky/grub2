@@ -558,6 +558,39 @@ find_lv (const char *name)
   return NULL;
 }
 
+static int
+grub_diskfilter_has_cryptodisk (const struct grub_diskfilter_lv *lv)
+{
+  struct grub_diskfilter_pv *pv;
+
+  if (!lv)
+    return 0;
+
+  if (lv->vg->pvs)
+    for (pv = lv->vg->pvs; pv; pv = pv->next)
+      {
+	if (!pv->disk)
+	{
+	  grub_dprintf ("diskfilter", _("Couldn't find physical volume `%s'."
+			" Some modules may be missing from core image."),
+			pv->name);
+	  continue;
+	}
+
+	switch (pv->disk->dev->id)
+	  {
+	    case GRUB_DISK_DEVICE_CRYPTODISK_ID:
+	      return 1;
+	    case GRUB_DISK_DEVICE_DISKFILTER_ID:
+	      return grub_diskfilter_has_cryptodisk (pv->disk->data);
+	    default:
+	      break;
+	  }
+      }
+
+  return 0;
+}
+
 static grub_err_t
 grub_diskfilter_open (const char *name, grub_disk_t disk)
 {
@@ -589,6 +622,8 @@ grub_diskfilter_open (const char *name, grub_disk_t disk)
 
   disk->total_sectors = lv->size;
   disk->max_agglomerate = GRUB_DISK_MAX_MAX_AGGLOMERATE;
+  disk->is_crypto_diskfilter = grub_diskfilter_has_cryptodisk (lv);
+
   return 0;
 }
 
