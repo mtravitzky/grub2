@@ -121,6 +121,41 @@ grub_cryptokey_tpmkey_discard (void)
     grub_cryptokey_discard();
 }
 
+static grub_file_t
+grub_distrust_open (grub_file_t io,
+		enum grub_file_type type __attribute__ ((unused)))
+{
+  grub_disk_t disk = io->device->disk;
+
+  if (io->device->disk &&
+      (io->device->disk->dev->id == GRUB_DISK_DEVICE_MEMDISK_ID
+       || io->device->disk->dev->id == GRUB_DISK_DEVICE_PROCFS_ID))
+    return io;
+
+  /* Ensure second stage files is in a protected location or grub won't hand
+   * over the key and discards it */
+  switch (type & GRUB_FILE_TYPE_MASK)
+    {
+      case GRUB_FILE_TYPE_ACPI_TABLE:
+      case GRUB_FILE_TYPE_CONFIG:
+      case GRUB_FILE_TYPE_DEVICE_TREE_IMAGE:
+      case GRUB_FILE_TYPE_FONT:
+      case GRUB_FILE_TYPE_GRUB_MODULE:
+      case GRUB_FILE_TYPE_GRUB_MODULE_LIST:
+      case GRUB_FILE_TYPE_LINUX_KERNEL:
+      case GRUB_FILE_TYPE_LINUX_INITRD:
+      case GRUB_FILE_TYPE_LOADENV:
+      case GRUB_FILE_TYPE_THEME:
+	if (!disk || !grub_disk_is_crypto (disk))
+	  grub_cryptokey_discard ();
+	break;
+      default:
+	break;
+    }
+
+  return io;
+}
+
 static grub_err_t
 grub_cmd_crypttab_entry (grub_command_t cmd __attribute__ ((unused)),
 	       int argc, char **argv)
@@ -153,6 +188,7 @@ GRUB_MOD_INIT(crypttab)
 {
   cmd = grub_register_command ("crypttab_entry", grub_cmd_crypttab_entry,
 			       N_("VOLUME-NAME ENCRYPTED-DEVICE KEY-FILE") , N_("No description"));
+  grub_file_filter_register (GRUB_FILE_FILTER_DISTRUST, grub_distrust_open);
   grub_dl_set_persistent (mod);
 }
 
