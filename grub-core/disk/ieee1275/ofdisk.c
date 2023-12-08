@@ -31,6 +31,13 @@
 static char *last_devpath;
 static grub_ieee1275_ihandle_t last_ihandle;
 
+#define IEEE1275_DISK_ALIAS "/disk@"
+#define IEEE1275_NVMEOF_DISK_ALIAS "/nvme-of/controller@"
+
+static char *boot_type;
+static char *boot_parent;
+static int is_boot_nvmeof;
+
 struct ofdisk_hash_ent
 {
   char *devpath;
@@ -529,12 +536,21 @@ dev_iterate (const struct grub_ieee1275_devalias *alias)
 {
   if (grub_strcmp (alias->type, "fcp") == 0)
   {
-      // Iterate disks
-      dev_iterate_fcp_disks(alias);
-    
-      // Iterate NVMeoF
-      dev_iterate_fcp_nvmeof(alias);
+    if (boot_type &&
+	grub_strcmp (boot_type, alias->type) != 0)
+      {
+	grub_dprintf ("ofdisk", "Skipped device: %s, type %s did not match boot_type %s\n",
+	    alias->path, alias->type, boot_type);
+	goto iter_children;
+      }
 
+    if (grub_strcmp (boot_parent, alias->path) == 0)
+      {
+	if (is_boot_nvmeof)
+	  dev_iterate_fcp_nvmeof(alias);
+	else
+	  dev_iterate_fcp_disks(alias);
+      }
   }
   else if (grub_strcmp (alias->type, "vscsi") == 0)
     {
@@ -551,6 +567,14 @@ dev_iterate (const struct grub_ieee1275_devalias *alias)
       args;
       char *buf, *bufptr;
       unsigned i;
+
+      if (boot_type &&
+	  grub_strcmp (boot_type, alias->type) != 0)
+	{
+	  grub_dprintf ("ofdisk", "Skipped device: %s, type %s did not match boot_type %s\n",
+	      alias->path, alias->type, boot_type);
+	  return;
+	}
 
       if (grub_ieee1275_open (alias->path, &ihandle))
 	return;
@@ -615,6 +639,14 @@ dev_iterate (const struct grub_ieee1275_devalias *alias)
       grub_uint16_t table_size;
       grub_ieee1275_ihandle_t ihandle;
 
+      if (boot_type &&
+	  grub_strcmp (boot_type, alias->type) != 0)
+	{
+	  grub_dprintf ("ofdisk", "Skipped device: %s, type %s did not match boot_type %s\n",
+	      alias->path, alias->type, boot_type);
+	  goto iter_children;
+	}
+
       buf = grub_malloc (grub_strlen (alias->path) +
                          sizeof ("/disk@7766554433221100"));
       if (!buf)
@@ -674,6 +706,7 @@ dev_iterate (const struct grub_ieee1275_devalias *alias)
       return;
     }
 
+ iter_children:
   {
     struct grub_ieee1275_devalias child;
 
@@ -1042,6 +1075,68 @@ static struct grub_disk_dev grub_ofdisk_dev =
     .next = 0
   };
 
+static char *
+get_parent_devname (const char *devname, int *is_nvmeof)
+{
+  char *parent, *pptr;
+
+  if (is_nvmeof)
+    *is_nvmeof = 0;
+
+  parent = grub_strdup (devname);
+
+  if (parent == NULL)
+    {
+      grub_print_error ();
+      return NULL;
+    }
+
+  pptr = grub_strstr (parent, IEEE1275_DISK_ALIAS);
+
+  if (pptr != NULL)
+    {
+      *pptr = '\0';
+      return parent;
+    }
+
+  pptr = grub_strstr (parent, IEEE1275_NVMEOF_DISK_ALIAS);
+
+  if (pptr != NULL)
+    {
+      *pptr = '\0';
+      if (is_nvmeof)
+	*is_nvmeof = 1;
+      return parent;
+    }
+
+  return parent;
+}
+
+static char *
+get_boot_device_parent (const char *bootpath, int *is_nvmeof)
+{
+  char *dev, *canon, *parent;
+
+  dev = grub_ieee1275_get_aliasdevname (bootpath);
+  canon = grub_ieee1275_canonicalise_devname (dev);
+
+  if (!canon)
+    {
+      /* This should not happen. */
+      grub_error (GRUB_ERR_BAD_DEVICE, "canonicalise devname failed");
+      grub_print_error ();
+      return NULL;
+    }
+  else
+    grub_dprintf ("ofdisk", "%s is canonical %s\n", bootpath, canon);
+
+  parent = get_parent_devname (canon, is_nvmeof);
+  grub_dprintf ("ofdisk", "%s is parent of %s\n", parent, canon);
+
+  grub_free (canon);
+  return parent;
+}
+
 static void
 insert_bootpath (void)
 {
@@ -1077,6 +1172,12 @@ insert_bootpath (void)
       char *device = grub_ieee1275_get_devname (bootpath);
       op = ofdisk_hash_add (device, NULL);
       op->is_boot = 1;
+      boot_parent = get_boot_device_parent (bootpath, &is_boot_nvmeof);
+      boot_type =  grub_ieee1275_get_device_type (boot_parent);
+      if (boot_type)
+	grub_dprintf ("ofdisk", "the boot device type %s is used for root device discovery, others excluded\n", boot_type);
+      else
+	grub_dprintf ("ofdisk", "unknown boot device type, will use all devices to discover root and may be slow\n");
     }
   grub_free (type);
   grub_free (bootpath);
@@ -1093,12 +1194,37 @@ grub_ofdisk_fini (void)
   grub_disk_dev_unregister (&grub_ofdisk_dev);
 }
 
+static const char *
+grub_env_get_boot_type (struct grub_env_var *var __attribute__ ((unused)),
+			const char *val __attribute__ ((unused)))
+{
+  static char *ret;
+
+  if (!ret)
+    ret = grub_xasprintf("boot: %s type: %s is_nvmeof: %d",
+	      boot_parent,
+	      boot_type ? : "unknown",
+	      is_boot_nvmeof);
+
+  return ret;
+}
+
+static char *
+grub_env_set_boot_type (struct grub_env_var *var __attribute__ ((unused)),
+			const char *val __attribute__ ((unused)))
+{
+  /* READ ONLY */
+  return NULL;
+}
+
 void
 grub_ofdisk_init (void)
 {
   grub_disk_firmware_fini = grub_ofdisk_fini;
 
   insert_bootpath ();
+  grub_register_variable_hook ("ofdisk_boot_type", grub_env_get_boot_type,
+                               grub_env_set_boot_type );
 
   grub_disk_dev_register (&grub_ofdisk_dev);
 }
