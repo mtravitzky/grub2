@@ -23,6 +23,10 @@
 #include <grub/tpm2/internal/structs.h>
 #include <grub/tpm2/internal/functions.h>
 
+/* Defined in: TCG TPM Specification, v1.59, Part 2, Section 10.6.1. */
+#define TPM2_PCR_TO_SELECT(x)  ((x) / 8)
+#define TPM2_PCR_TO_BIT(x)     (1 << ((x) % 8))
+
 /* Well-Known Windows SRK handle */
 #define TPM2_SRK_HANDLE 0x81000001
 
