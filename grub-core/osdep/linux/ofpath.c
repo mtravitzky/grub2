@@ -424,7 +424,7 @@ of_find_fc_host(char* host_wwpn){
 
   struct ofpath_files_list_root* portnames_file_list;
 
-  portnames_file_list=malloc(sizeof(portnames_file_list));
+  portnames_file_list=malloc(sizeof(*portnames_file_list));
   portnames_file_list->items=0;
   portnames_file_list->first=NULL;
 
@@ -586,7 +586,7 @@ of_path_of_nvme(const char *sys_devname __attribute__((unused)),
       /* If is a NVMeoF */
       if(strstr(sysfs_path,"nvme-fabrics")){
         struct ofpath_nvmeof_info* nvmeof_info;
-        nvmeof_info = malloc(sizeof(nvmeof_info));
+        nvmeof_info = malloc(sizeof(*nvmeof_info));
 
         of_path_get_nvmeof_adapter_info(sysfs_path, nvmeof_info);
 
@@ -615,7 +615,7 @@ of_path_of_nvme(const char *sys_devname __attribute__((unused)),
       sysfs_path = nvme_get_syspath (device);
       if(strstr(sysfs_path,"nvme-fabrics")){
         struct ofpath_nvmeof_info* nvmeof_info;
-        nvmeof_info = malloc(sizeof(nvmeof_info));
+        nvmeof_info = malloc(sizeof(*nvmeof_info));
 
         of_path_get_nvmeof_adapter_info(sysfs_path, nvmeof_info);
       
