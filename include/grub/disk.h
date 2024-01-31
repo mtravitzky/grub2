@@ -244,7 +244,12 @@ grub_disk_dev_iterate (grub_disk_dev_iterate_hook_t hook, void *hook_data)
 
   for (pull = 0; pull < GRUB_DISK_PULL_MAX; pull++)
     for (p = grub_disk_dev_list; p; p = p->next)
-      if (p->disk_iterate && (p->disk_iterate) (hook, hook_data, pull))
+      if (p->id != GRUB_DISK_DEVICE_MEMDISK_ID && p->disk_iterate && (p->disk_iterate) (hook, hook_data, pull))
+	return 1;
+
+  for (pull = 0; pull < GRUB_DISK_PULL_MAX; pull++)
+    for (p = grub_disk_dev_list; p; p = p->next)
+      if (p->id == GRUB_DISK_DEVICE_MEMDISK_ID && p->disk_iterate && (p->disk_iterate) (hook, hook_data, pull))
 	return 1;
 
   return 0;
