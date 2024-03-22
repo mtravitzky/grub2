@@ -35,8 +35,13 @@ static grub_ieee1275_ihandle_t last_ihandle;
 #define IEEE1275_DISK_ALIAS "/disk@"
 #define IEEE1275_NVMEOF_DISK_ALIAS "/nvme-of/controller@"
 
+/* Used to check boot_type, print debug message if doesn't match, this can be
+ * useful to measure boot delays */
 static char *boot_type;
+/* Used to restrict fcp to a physical boot path */
 static char *boot_parent;
+/* Knowing the nvmeof in advance to avoid blind open test during iteration to
+ * validate a path */
 static int is_boot_nvmeof;
 
 struct ofdisk_hash_ent
@@ -540,20 +545,30 @@ dev_iterate (const struct grub_ieee1275_devalias *alias)
 {
   if (grub_strcmp (alias->type, "fcp") == 0)
   {
-    if (boot_type &&
-	grub_strcmp (boot_type, alias->type) != 0)
+    if (boot_parent &&
+	grub_strcmp (boot_parent, alias->path) != 0)
       {
-	grub_dprintf ("ofdisk", "Skipped device: %s, type %s did not match boot_type %s\n",
-	    alias->path, alias->type, boot_type);
+	grub_dprintf ("ofdisk", "Skipped device: %s, doesn't match boot_parent %s\n",
+	    alias->path, boot_parent);
 	goto iter_children;
       }
 
-    if (grub_strcmp (boot_parent, alias->path) == 0)
+    /* Allow set boot_parent and boot_type to NULL to force iteration */
+    if (!boot_parent)
       {
-	if (is_boot_nvmeof)
-	  dev_iterate_fcp_nvmeof(alias);
-	else
-	  dev_iterate_fcp_disks(alias);
+	grub_dprintf ("ofdisk", "iterate %s\n", alias->path);
+	dev_iterate_fcp_nvmeof(alias);
+	dev_iterate_fcp_disks(alias);
+      }
+    else if (is_boot_nvmeof)
+      {
+	grub_dprintf ("ofdisk", "iterate nvmeof: %s\n", alias->path);
+	dev_iterate_fcp_nvmeof(alias);
+      }
+    else
+      {
+	grub_dprintf ("ofdisk", "iterate fcp: %s\n", alias->path);
+	dev_iterate_fcp_disks(alias);
       }
   }
   else if (grub_strcmp (alias->type, "vscsi") == 0)
@@ -575,9 +590,8 @@ dev_iterate (const struct grub_ieee1275_devalias *alias)
       if (boot_type &&
 	  grub_strcmp (boot_type, alias->type) != 0)
 	{
-	  grub_dprintf ("ofdisk", "Skipped device: %s, type %s did not match boot_type %s\n",
+	  grub_dprintf ("ofdisk", "WARN: device: %s, type %s not match boot_type %s\n",
 	      alias->path, alias->type, boot_type);
-	  return;
 	}
 
       if (grub_ieee1275_open (alias->path, &ihandle))
@@ -646,9 +660,8 @@ dev_iterate (const struct grub_ieee1275_devalias *alias)
       if (boot_type &&
 	  grub_strcmp (boot_type, alias->type) != 0)
 	{
-	  grub_dprintf ("ofdisk", "Skipped device: %s, type %s did not match boot_type %s\n",
+	  grub_dprintf ("ofdisk", "WARN: device: %s, type %s not match boot_type %s\n",
 	      alias->path, alias->type, boot_type);
-	  goto iter_children;
 	}
 
       buf = grub_malloc (grub_strlen (alias->path) +
@@ -1116,13 +1129,37 @@ get_parent_devname (const char *devname, int *is_nvmeof)
   return parent;
 }
 
+
+static int
+is_canonical (const char *path)
+{
+  if (grub_strstr (path, IEEE1275_DISK_ALIAS) ||
+      grub_strstr (path, IEEE1275_NVMEOF_DISK_ALIAS))
+    return 1;
+  else
+    return 0;
+}
+
 static char *
 get_boot_device_parent (const char *bootpath, int *is_nvmeof)
 {
-  char *dev, *canon, *parent;
+  char *canon, *parent;
 
-  dev = grub_ieee1275_get_aliasdevname (bootpath);
-  canon = grub_ieee1275_canonicalise_devname (dev);
+  if (is_canonical (bootpath))
+    {
+      early_log ("Use %s as canonical\n", bootpath);
+      canon = grub_strdup (bootpath);
+    }
+  else
+    {
+      char *dev;
+
+      dev = grub_ieee1275_get_aliasdevname (bootpath);
+      canon = grub_ieee1275_canonicalise_devname (dev);
+      early_log ("bootpath: %s \n", bootpath);
+      early_log ("alias: %s\n", dev);
+      early_log ("canonical: %s\n", canon);
+    }
 
   if (!canon)
     {
@@ -1131,8 +1168,6 @@ get_boot_device_parent (const char *bootpath, int *is_nvmeof)
       grub_print_error ();
       return NULL;
     }
-  else
-    early_log ("%s is canonical %s\n", bootpath, canon);
 
   parent = get_parent_devname (canon, is_nvmeof);
   early_log ("%s is parent of %s\n", parent, canon);
@@ -1179,9 +1214,9 @@ insert_bootpath (void)
       boot_parent = get_boot_device_parent (bootpath, &is_boot_nvmeof);
       boot_type =  grub_ieee1275_get_device_type (boot_parent);
       if (boot_type)
-	early_log ("the boot device type %s is used for root device discovery, others excluded\n", boot_type);
+	early_log ("the boot device type: %s\n", boot_type);
       else
-	early_log ("unknown boot device type, will use all devices to discover root and may be slow\n");
+	early_log ("the boot device type is unknown\n");
     }
   grub_free (type);
   grub_free (bootpath);
