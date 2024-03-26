@@ -54,14 +54,16 @@ esac
 if ( [ "x${GRUB_DEVICE_UUID}" = "x" ] && [ "x${GRUB_DEVICE_PARTUUID}" = "x" ] ) \
     || ( [ "x${GRUB_DISABLE_LINUX_UUID}" = "xtrue" ] \
 	&& [ "x${GRUB_DISABLE_LINUX_PARTUUID}" = "xtrue" ] ) \
-    || ( ! test -e "/dev/disk/by-uuid/${GRUB_DEVICE_UUID}" \
-	&& ! test -e "/dev/disk/by-partuuid/${GRUB_DEVICE_PARTUUID}" ) \
     || ( test -e "${GRUB_DEVICE}" && uses_abstraction "${GRUB_DEVICE}" lvm ); then
   LINUX_ROOT_DEVICE=${GRUB_DEVICE}
 elif [ "x${GRUB_DEVICE_UUID}" = "x" ] \
     || [ "x${GRUB_DISABLE_LINUX_UUID}" = "xtrue" ]; then
+  test -e "/dev/disk/by-partuuid/${GRUB_DEVICE_PARTUUID}" ||
+    echo "WARN: Use PARTUUID=${GRUB_DEVICE_PARTUUID} despite missing by-partuuid symlink" >&2
   LINUX_ROOT_DEVICE=PARTUUID=${GRUB_DEVICE_PARTUUID}
 else
+  test -e "/dev/disk/by-uuid/${GRUB_DEVICE_UUID}" ||
+    echo "WARN: Use UUID=${GRUB_DEVICE_UUID} despite missing by-uuid symlink" >&2
   LINUX_ROOT_DEVICE=UUID=${GRUB_DEVICE_UUID}
 fi
 
