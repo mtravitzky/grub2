@@ -77,7 +77,7 @@ ifd_atrbuf_to_string(const ifd_atrbuf_t *atr)
 	return namebuf;
 }
 
-bool
+static bool
 ifd_atrbuf_equal(const ifd_atrbuf_t *atr1, const ifd_atrbuf_t *atr2)
 {
 	return atr1->len == atr2->len && !memcmp(atr1->data, atr2->data, atr1->len);
@@ -210,7 +210,7 @@ ifd_card_apdu(ifd_card_t *card, buffer_t *apdu, uint16_t *sw_ret)
 		error("Response APDU too short\n");
 		return NULL;
 	} else {
-		const unsigned char *swpos = buffer_write_pointer(rapdu) - 2;
+		const unsigned char *swpos = (const unsigned char *)buffer_write_pointer(rapdu) - 2;
 
 		*sw_ret = (swpos[0] << 8) | swpos[1];
 		rapdu->wpos -= 2;
