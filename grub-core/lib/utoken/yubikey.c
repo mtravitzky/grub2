@@ -84,7 +84,7 @@ yubikey_init(void)
 	ifd_register_card_driver(&atr_yubikey5_p1, "YubiKey 5", &yubikey_driver, YK_VARIANT_YUBIKEY_5_P1);
 }
 
-bool
+static bool
 yubikey_select_application(ifd_card_t *card, const void *aid, size_t aid_len)
 {
 	buffer_t *apdu, *rapdu = NULL;
@@ -120,7 +120,7 @@ yubikey_set_card_option(ifd_card_t *card, const char *key, const char *value)
 {
 	if (!strcmp(key, "key-slot") && value) {
 		unsigned int key_slot;
-		char *end;
+		const char *end;
 
 		key_slot = strtoul(value, &end, 16);
 		if (*end)
@@ -217,9 +217,9 @@ done:
 }
 
 static inline unsigned int
-enc_push_byte(unsigned char *encoded, unsigned int pos, uint8_t byte)
+enc_push_byte(unsigned char *encoded, unsigned int pos, uint8_t bytes)
 {
-	encoded[--pos] = byte;
+	encoded[--pos] = bytes;
 	return pos;
 }
 
