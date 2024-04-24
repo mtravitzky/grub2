@@ -2721,3 +2721,19 @@ module = {
   name = crypttab;
   common = commands/crypttab.c;
 };
+
+module = {
+  name = utoken;
+  common = lib/utoken/yubikey.c;
+  common = lib/utoken/scard.c;
+  common = lib/utoken/reader.c;
+  common = lib/utoken/usb.c;
+  common = lib/utoken/descriptor.c;
+  common = lib/utoken/ccid.c;
+  common = lib/utoken/util.c;
+  common = lib/utoken/bufparser.c;
+  common = lib/utoken_wrap/wrap.c;
+  cflags = '$(CFLAGS_POSIX) $(CFLAGS_GNULIB)';
+  cppflags = '$(CPPFLAGS_POSIX) $(CPPFLAGS_GNULIB) -I$(srcdir)/lib/utoken';
+  enable = emu;
+};
