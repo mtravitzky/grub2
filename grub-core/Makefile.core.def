@@ -2727,7 +2727,6 @@ module = {
   common = lib/utoken/yubikey.c;
   common = lib/utoken/scard.c;
   common = lib/utoken/reader.c;
-  common = lib/utoken/usb.c;
   common = lib/utoken/descriptor.c;
   common = lib/utoken/ccid.c;
   common = lib/utoken/util.c;
