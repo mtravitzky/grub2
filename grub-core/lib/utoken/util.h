@@ -25,7 +25,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+#ifdef GRUB_MACHINE
+#include <grub/term.h>
+#endif
 
 extern unsigned int	opt_debug;
 
@@ -36,8 +38,13 @@ debug(const char *fmt, ...)
 
 	if (opt_debug) {
 		va_start(ap, fmt);
+#ifdef GRUB_MACHINE
+		grub_printf("::: ");
+		grub_vprintf (fmt, ap);
+#else
 		fprintf(stderr, "::: ");
 		vfprintf(stderr, fmt, ap);
+#endif
 		va_end(ap);
 	}
 }
@@ -49,8 +56,13 @@ debug2(const char *fmt, ...)
 
 	if (opt_debug > 1) {
 		va_start(ap, fmt);
+#ifdef GRUB_MACHINE
+		grub_printf("::: ");
+		grub_vprintf (fmt, ap);
+#else
 		fprintf(stderr, "::: ");
 		vfprintf(stderr, fmt, ap);
+#endif
 		va_end(ap);
 	}
 }
@@ -61,7 +73,11 @@ infomsg(const char *fmt, ...)
 	va_list ap;
 
 	va_start(ap, fmt);
+#ifdef GRUB_MACHINE
+	grub_vprintf (fmt, ap);
+#else
 	vfprintf(stderr, fmt, ap);
+#endif
 	va_end(ap);
 }
 
@@ -71,8 +87,13 @@ warning(const char *fmt, ...)
 	va_list ap;
 
 	va_start(ap, fmt);
+#ifdef GRUB_MACHINE
+	grub_printf("Warning: ");
+	grub_vprintf (fmt, ap);
+#else
 	fprintf(stderr, "Warning: ");
 	vfprintf(stderr, fmt, ap);
+#endif
 	va_end(ap);
 }
 
@@ -82,8 +103,13 @@ error(const char *fmt, ...)
 	va_list ap;
 
 	va_start(ap, fmt);
+#ifdef GRUB_MACHINE
+	grub_printf("Error: ");
+	grub_vprintf (fmt, ap);
+#else
 	fprintf(stderr, "Error: ");
 	vfprintf(stderr, fmt, ap);
+#endif
 	va_end(ap);
 }
 
@@ -93,11 +119,21 @@ fatal(const char *fmt, ...)
 	va_list ap;
 
 	va_start(ap, fmt);
+#ifdef GRUB_MACHINE
+	grub_printf("Fatal: ");
+	grub_vprintf (fmt, ap);
+#else
 	fprintf(stderr, "Fatal: ");
 	vfprintf(stderr, fmt, ap);
+#endif
 	va_end(ap);
 
+#ifdef GRUB_MACHINE
+	grub_refresh ();
+	grub_abort ();
+#else
 	exit(2);
+#endif
 }
 
 static inline void
@@ -108,6 +144,10 @@ drop_string(char **var)
 		*var = NULL;
 	}
 }
+
+#ifdef GRUB_MACHINE
+#define strdup(...) grub_strdup(__VA_ARGS__)
+#endif
 
 static inline void
 assign_string(char **var, const char *string)
