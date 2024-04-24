@@ -2731,7 +2731,6 @@ module = {
   common = lib/utoken/descriptor.c;
   common = lib/utoken/ccid.c;
   common = lib/utoken/util.c;
-  common = lib/utoken/bufparser.c;
   common = lib/utoken_wrap/wrap.c;
   cflags = '$(CFLAGS_POSIX) $(CFLAGS_GNULIB)';
   cppflags = '$(CPPFLAGS_POSIX) $(CPPFLAGS_GNULIB) -I$(srcdir)/lib/utoken';
