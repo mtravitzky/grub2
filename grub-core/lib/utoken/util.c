@@ -26,7 +26,7 @@
 
 #include "util.h"
 
-bool
+static bool
 parse_hexdigit(const char **pos, unsigned char *ret)
 {
 	char cc = *(*pos)++;
@@ -45,13 +45,13 @@ parse_hexdigit(const char **pos, unsigned char *ret)
 	return true;
 }
 
-bool
+static bool
 parse_octet(const char **pos, unsigned char *ret)
 {
 	return parse_hexdigit(pos, ret) && parse_hexdigit(pos, ret);
 }
 
-unsigned int
+static unsigned int __attribute__((unused))
 parse_octet_string(const char *string, unsigned char *buffer, size_t bufsz)
 {
 	const char *orig_string = string;
