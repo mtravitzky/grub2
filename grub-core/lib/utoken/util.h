@@ -157,7 +157,7 @@ assign_string(char **var, const char *string)
 		*var = strdup(string);
 }
 
-extern void		hexdump(const void *data, size_t size, void (*)(const char *, ...), unsigned int indent);
+extern void		utoken_hexdump(const void *data, size_t size, void (*)(const char *, ...), unsigned int indent);
 extern const char *	print_octet_string(const unsigned char *data, unsigned int len);
 
 #if 0

@@ -234,7 +234,7 @@ ccid_dump_response(buffer_t *pkt)
 		debug("Received CCID response\n");
 	}
 
-	hexdump(hdr, 10 + payload_len, debug2, 4);
+	utoken_hexdump(hdr, 10 + payload_len, debug2, 4);
 }
 
 static ccid_command_t *
@@ -254,7 +254,7 @@ ccid_xfer(ccid_reader_t *reader, ccid_command_t *cmd, uint8_t expected_resp_type
 	if (opt_debug > 1) {
 	       buffer_t *pkt = cmd->pkt;
 
-               hexdump(buffer_read_pointer(pkt), buffer_available(pkt), debug2, 4);
+               utoken_hexdump(buffer_read_pointer(pkt), buffer_available(pkt), debug2, 4);
         }
 
 	rv = uusb_send(reader->dev, cmd->pkt);

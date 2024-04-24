@@ -103,7 +103,7 @@ print_octet_string(const unsigned char *data, unsigned int len)
 }
 
 void
-hexdump(const void *data, size_t size, void (*print_fn)(const char *, ...), unsigned int indent)
+utoken_hexdump(const void *data, size_t size, void (*print_fn)(const char *, ...), unsigned int indent)
 {
 	const unsigned char *bytes = data;
 	unsigned int i, j, bytes_per_line;

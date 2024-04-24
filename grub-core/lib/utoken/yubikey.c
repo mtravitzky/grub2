@@ -349,7 +349,7 @@ yubikey_decipher(ifd_card_t *card, buffer_t *ciphertext)
 
 	if (opt_debug > 1) {
 		debug("Trying to decipher %u bytes of data\n", in_len);
-		hexdump(buffer_read_pointer(ciphertext), in_len, debug2, 4);
+		utoken_hexdump(buffer_read_pointer(ciphertext), in_len, debug2, 4);
 	}
 
 	/* For now, assume it's always RSA */
@@ -414,7 +414,7 @@ yubikey_decipher(ifd_card_t *card, buffer_t *ciphertext)
 		rapdu = NULL;
 
 		debug("Returning cleartext\n");
-		hexdump(buffer_read_pointer(cleartext), buffer_available(cleartext), debug, 4);
+		utoken_hexdump(buffer_read_pointer(cleartext), buffer_available(cleartext), debug, 4);
 	}
 
 done:
