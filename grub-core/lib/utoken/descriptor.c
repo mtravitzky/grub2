@@ -33,13 +33,13 @@ static bool	uusb_handle_ccid_descriptor(uusb_interface_t *, const unsigned char 
 	{ USB_INTF_CLASS_ ## C, USB_INTF_SUBCLASS_ ## S, USB_INTF_PROTOCOL_ ## P }
 
 static uusb_intf_type_t	uusb_intf_type_list[] = {
-	{ "keyboard", CLASSPROTO(HID, BOOT, KEYBOARD), },
+	{ "keyboard", CLASSPROTO(HID, BOOT, KEYBOARD), .handle_descriptor = NULL },
 	{ "ccid", CLASSPROTO(CCID, ZERO, ZERO), .handle_descriptor = uusb_handle_ccid_descriptor },
-	{ "storage", CLASSPROTO(STORAGE, ANY, ANY), },
+	{ "storage", CLASSPROTO(STORAGE, ANY, ANY), .handle_descriptor = NULL },
 	{ NULL }
 };
 
-const char *
+static const char *
 uusb_dt_type_string(unsigned int dt_type)
 {
 	static char name[16];
