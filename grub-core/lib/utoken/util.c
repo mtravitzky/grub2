@@ -26,6 +26,10 @@
 
 #include "util.h"
 
+#ifdef GRUB_MACHINE
+#define sprintf(s, fmt, ...) grub_snprintf(s, sizeof(s), fmt, ##__VA_ARGS__)
+#endif
+
 static bool
 parse_hexdigit(const char **pos, unsigned char *ret)
 {
