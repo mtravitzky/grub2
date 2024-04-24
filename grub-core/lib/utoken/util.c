@@ -30,6 +30,8 @@
 #define sprintf(s, fmt, ...) grub_snprintf(s, sizeof(s), fmt, ##__VA_ARGS__)
 #endif
 
+unsigned int opt_debug = 0;
+
 static bool
 parse_hexdigit(const char **pos, unsigned char *ret)
 {
