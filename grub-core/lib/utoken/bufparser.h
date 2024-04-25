@@ -26,7 +26,7 @@
 #include <string.h>
 #include "util.h"
 
-#ifdef GRUB_MACHINE
+#if 0
 #include <grub/types.h>
 
 #define le16toh(x) grub_le_to_cpu16(x)

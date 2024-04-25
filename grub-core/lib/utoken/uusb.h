@@ -25,6 +25,7 @@
 #include <sys/types.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <grub/symbol.h>
 
 typedef struct uusb_type {
 	uint16_t	idVendor;
@@ -52,9 +53,9 @@ extern uusb_dev_t *	usb_open_type(const uusb_type_t *);
 /* Alternative idea: find device(s) that have a CCID descriptor */
 
 extern bool		uusb_parse_descriptors(uusb_dev_t *dev, const unsigned char *data, size_t len);
-extern bool		uusb_dev_select_ccid_interface(uusb_dev_t *, const struct ccid_descriptor **);
-extern bool		uusb_send(uusb_dev_t *, buffer_t *);
-extern buffer_t *	uusb_recv(uusb_dev_t *, size_t maxlen, long timeout);
+bool		EXPORT_FUNC(uusb_dev_select_ccid_interface)(uusb_dev_t *, const struct ccid_descriptor **);
+bool		EXPORT_FUNC(uusb_send)(uusb_dev_t *, buffer_t *);
+buffer_t *	EXPORT_FUNC(uusb_recv)(uusb_dev_t *, size_t maxlen, long timeout);
 
 extern ccid_reader_t *	ccid_reader_create(uusb_dev_t *);
 extern bool		ccid_reader_select_slot(ccid_reader_t *, unsigned int slot);

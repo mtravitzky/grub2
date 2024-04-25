@@ -107,7 +107,7 @@ kernel = {
   mips_arc_cppflags = '-DGRUB_DECOMPRESSOR_LINK_ADDR=$(TARGET_DECOMPRESSOR_LINK_ADDR)';
   i386_qemu_cppflags     = '-DGRUB_BOOT_MACHINE_LINK_ADDR=$(GRUB_BOOT_MACHINE_LINK_ADDR)';
   emu_cflags = '$(CFLAGS_GNULIB)';
-  emu_cppflags = '$(CPPFLAGS_GNULIB)';
+  emu_cppflags = '$(CPPFLAGS_GNULIB) -I$(srcdir)/lib/utoken';
   arm_uboot_ldflags       = '-Wl,-r';
   arm_uboot_stripflags    = '--strip-unneeded -K start -R .note -R .comment -R .note.gnu.gold-version';
   arm_coreboot_ldflags       = '-Wl,-r';
@@ -381,6 +381,7 @@ kernel = {
   emu = kern/emu/time.c;
   emu = kern/emu/cache.c;
   emu = osdep/emuconsole.c;
+  emu = lib/utoken/usb.c;
   extra_dist = osdep/unix/emuconsole.c;
   extra_dist = osdep/windows/emuconsole.c;
   emu = osdep/dl.c;

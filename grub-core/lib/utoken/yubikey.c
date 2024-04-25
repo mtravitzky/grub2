@@ -20,7 +20,17 @@
 
 
 #include "scard.h"
+
+#include <grub/types.h>
+
+#define le16toh(x) grub_le_to_cpu16(x)
+#define le32toh(x) grub_le_to_cpu32(x)
+#define le64toh(x) grub_le_to_cpu64(x)
+#define htole16(x) grub_cpu_to_le16(x)
+#define htole32(x) grub_cpu_to_le32(x)
+#define htole64(x) grub_cpu_to_le64(x)
 #include "bufparser.h"
+
 #include "util.h"
 
 #define YKPIV_INS_VERIFY		0x20
