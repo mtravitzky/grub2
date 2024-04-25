@@ -18,6 +18,7 @@
  * Written by Olaf Kirch <okir@suse.com>
  */
 
+#include <config-util.h>
 #include <stdbool.h>
 #include <sys/types.h>
 #include <stdio.h>

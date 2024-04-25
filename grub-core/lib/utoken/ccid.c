@@ -18,6 +18,7 @@
  * Written by Olaf Kirch <okir@suse.com>
  */
 
+#include <config-util.h>
 
 #include "ccid_impl.h"
 #include "uusb_const.h"

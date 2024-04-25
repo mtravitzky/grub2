@@ -36,7 +36,6 @@
 #include "uusb_const.h" /* maybe we should move the logic in uusb_set_endpoints to descriptors.c */
 #include "bufparser.h"
 
-#if 0
 #define SYSFS_USB_DEVICES	"/sys/bus/usb/devices"
 
 bool
@@ -333,7 +332,6 @@ usb_open_type(const uusb_type_t *type)
 
 	return __usb_open(sysfs_dir);
 }
-#endif
 
 static bool
 uusb_select_interface(uusb_dev_t *dev, const uusb_config_t *config, const uusb_interface_t *interface)
