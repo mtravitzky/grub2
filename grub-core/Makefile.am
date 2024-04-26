@@ -327,6 +327,7 @@ if COND_GRUB_EMU_PCI
 KERNEL_HEADER_FILES += $(top_srcdir)/include/grub/libpciaccess.h
 endif
 KERNEL_HEADER_FILES += $(top_srcdir)/grub-core/lib/utoken/uusb.h
+KERNEL_HEADER_FILES += $(top_srcdir)/grub-core/lib/utoken/bufparser.h
 endif
 
 symlist.h: $(top_builddir)/config.h $(KERNEL_HEADER_FILES)

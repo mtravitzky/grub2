@@ -2737,3 +2737,11 @@ module = {
   cppflags = '$(CPPFLAGS_POSIX) $(CPPFLAGS_GNULIB) -I$(srcdir)/lib/utoken';
   enable = emu;
 };
+
+module = {
+  name = utoken_decrypt;
+  emu = lib/utoken/main.c;
+  cflags = '$(CFLAGS_POSIX) $(CFLAGS_GNULIB)';
+  cppflags = '$(CPPFLAGS_POSIX) $(CPPFLAGS_GNULIB) -I$(srcdir)/lib/utoken';
+  enable = emu;
+};

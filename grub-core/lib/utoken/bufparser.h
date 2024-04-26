@@ -343,7 +343,7 @@ buffer_truncate(buffer_t *bp, size_t len)
 	return true;
 }
 
-extern buffer_t *		buffer_read_file(const char *filename, int flags);
-extern bool			buffer_write_file(const char *filename, buffer_t *bp);
+buffer_t *		EXPORT_FUNC(buffer_read_file)(const char *filename, int flags);
+bool			EXPORT_FUNC(buffer_write_file)(const char *filename, buffer_t *bp);
 
 #endif /* BUFPARSER_H */
