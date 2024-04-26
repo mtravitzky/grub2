@@ -384,6 +384,7 @@ kernel = {
   emu = lib/utoken/usb.c;
   emu = lib/utoken/descriptor.c;
   emu = lib/utoken/ccid.c;
+  emu = lib/utoken/bufparser.c;
   extra_dist = osdep/unix/emuconsole.c;
   extra_dist = osdep/windows/emuconsole.c;
   emu = osdep/dl.c;

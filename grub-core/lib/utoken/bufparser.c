@@ -18,6 +18,7 @@
  * Written by Olaf Kirch <okir@suse.com>
  */
 
+#include <config-util.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -26,8 +27,11 @@
 
 #include "bufparser.h"
 
+/* This should be moved to bufparser.h */
+#define debug(fmt, ...) grub_dprintf ("utoken", fmt, ##__VA_ARGS__)
+
 buffer_t *
-buffer_read_file(const char *filename, int flags)
+buffer_read_file(const char *filename, int flags __attribute__ ((unused)))
 {
 	const char *display_name = filename;
 	bool closeit = true;
