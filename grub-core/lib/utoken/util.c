@@ -22,7 +22,6 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <stdbool.h>
-#include <iconv.h>
 
 #include "util.h"
 
