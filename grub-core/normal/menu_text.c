@@ -159,7 +159,7 @@ print_message (int nested, int edit, struct grub_term_output *term, int dry_run)
   if (edit && (term->flags & GRUB_TERM_LINE))
     {
       ret += grub_print_message_indented_real
-	(_("lolololololololol. '^i' lists "
+	(_("Minimum Emacs-like screen editing is supported. '^i' lists "
 	   "completions. Type '^x' to boot, '^c' for a command-line "
 	   "or '^[' to discard edits and return to the GRUB menu."),
 	 STANDARD_MARGIN, STANDARD_MARGIN, term, dry_run);
@@ -167,7 +167,8 @@ print_message (int nested, int edit, struct grub_term_output *term, int dry_run)
   else
   if (edit)
     {
-      ret += grub_print_message_indented_real (_("lolololololololol. TAB lists completions. Press Ctrl-x or F10 to boot, Ctrl-c or F2 for a \
+      ret += grub_print_message_indented_real (_("Minimum Emacs-like screen editing is \
+supported. TAB lists completions. Press Ctrl-x or F10 to boot, Ctrl-c or F2 for a \
 command-line or ESC to discard edits and return to the GRUB menu."),
 					       STANDARD_MARGIN, STANDARD_MARGIN,
 					       term, dry_run);
@@ -196,7 +197,7 @@ command-line or ESC to discard edits and return to the GRUB menu."),
       if (nested)
 	{
 	  ret += grub_print_message_indented_real
-	    (_("Press enter to do stuff lol, "
+	    (_("Press enter to boot the selected OS, "
 	       "`e' to edit the commands before booting "
 	       "or `c' for a command-line. ESC to return previous menu."),
 	     STANDARD_MARGIN, STANDARD_MARGIN, term, dry_run);
@@ -204,7 +205,7 @@ command-line or ESC to discard edits and return to the GRUB menu."),
       else
 	{
 	  ret += grub_print_message_indented_real
-	    (_("Press enter to do stuff lol, "
+	    (_("Press enter to boot the selected OS, "
 	       "`e' to edit the commands before booting "
 	       "or `c' for a command-line."),
 	     STANDARD_MARGIN, STANDARD_MARGIN, term, dry_run);
