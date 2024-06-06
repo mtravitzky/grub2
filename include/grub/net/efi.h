@@ -140,5 +140,6 @@ extern grub_command_func_t grub_efi_net_list_addrs;
 extern grub_command_func_t grub_efi_net_add_addr;
 extern grub_command_func_t grub_efi_net_bootp;
 extern grub_command_func_t grub_efi_net_bootp6;
+extern grub_command_func_t grub_efi_net_list_dns;
 
 #endif /* ! GRUB_NET_EFI_HEADER */

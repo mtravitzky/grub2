@@ -2026,6 +2026,7 @@ static enum {
 } init_mode;
 
 static grub_command_t cmd_bootp, cmd_bootp6;
+static grub_command_t cmd_lsdns;
 
 #endif
 
@@ -2055,6 +2056,8 @@ GRUB_MOD_INIT(net)
       cmd_bootp6 = grub_register_command ("net_bootp6", grub_efi_net_bootp6,
 					 N_("[CARD]"),
 					 N_("perform a bootp autoconfiguration"));
+      cmd_lsdns = grub_register_command ("net_ls_dns", grub_efi_net_list_dns,
+					"", N_("List DNS servers"));
       init_mode = INIT_MODE_EFI;
       return;
     }

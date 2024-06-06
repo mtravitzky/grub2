@@ -2411,6 +2411,7 @@ module = {
   efi = net/efi/ip4_config.c;
   efi = net/efi/ip6_config.c;
   efi = net/efi/dhcp.c;
+  efi = net/efi/dns.c;
 };
 
 module = {
