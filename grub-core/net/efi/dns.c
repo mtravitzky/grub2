@@ -22,10 +22,10 @@ grub_cmd_efi_list_dns (
   handles = grub_efi_locate_handle (GRUB_EFI_BY_PROTOCOL, &dns4_protocol_guid,
 				    0, &num_handles);
 
-  grub_printf ("Handles found: %lu", num_handles);
+  grub_printf ("Handles found: %lu \n", num_handles);
 
   if(handles){
-    grub_printf("%p", handles[0]);
+    grub_printf("First Handle: %p\n", handles[0]);
   }
 
   return GRUB_ERR_NONE;
