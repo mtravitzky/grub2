@@ -24,6 +24,10 @@ grub_cmd_efi_list_dns (
 
   grub_printf ("Handles found: %d", num_handles);
 
+  if(handles){
+    grub_printf("%d", handles[0]);
+  }
+
   return GRUB_ERR_NONE;
 }
 
