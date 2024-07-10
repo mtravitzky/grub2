@@ -89,6 +89,7 @@ grub_efi_locate_handle (grub_efi_locate_search_type_t search_type,
   if (status != GRUB_EFI_SUCCESS)
     {
       grub_free (buffer);
+	  grub_printf("EFI status unsuccessful");
       return 0;
     }
 
