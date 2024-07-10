@@ -6,7 +6,7 @@
 #include <grub/net/efi.h>
 #include <grub/charset.h>
 
-static grub_guid_t dns4_protocol_guid = GRUB_EFI_DNS4_PROTOCOL_GUID;
+static grub_guid_t dns4sb_protocol_guid = GRUB_EFI_DNS4_SERVICE_BINDING_PROTOCOL_GUID;
 
 static grub_err_t
 grub_cmd_efi_list_dns (
@@ -19,7 +19,7 @@ grub_cmd_efi_list_dns (
   grub_efi_uintn_t num_handles;
   num_handles = 0;
 
-  handles = grub_efi_locate_handle (GRUB_EFI_BY_PROTOCOL, &dns4_protocol_guid,
+  handles = grub_efi_locate_handle (GRUB_EFI_BY_PROTOCOL, &dns4sb_protocol_guid,
 				    0, &num_handles);
 
   grub_printf ("Handles found: %lu \n", num_handles);
