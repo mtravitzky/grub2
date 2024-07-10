@@ -24,8 +24,12 @@ grub_cmd_efi_list_dns (
 
   grub_printf ("Handles found: %lu \n", num_handles);
 
-  if(handles){
-    grub_printf("First Handle: %p\n", handles[0]);
+  if(handles == NULL)
+  {
+      grub_printf ("No handles pointer!");
+  } else 
+  {
+      grub_printf("First Handle: %p\n", handles[0]);
   }
 
   return GRUB_ERR_NONE;
