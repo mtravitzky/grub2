@@ -17,7 +17,7 @@ grub_cmd_efi_list_dns (
   grub_printf ("Experimental\n");
   grub_efi_handle_t *handles;
   grub_efi_uintn_t num_handles;
-  //unsigned i, j, k;
+  num_handles = 0;
 
   handles = grub_efi_locate_handle (GRUB_EFI_BY_PROTOCOL, &dns4_protocol_guid,
 				    0, &num_handles);
