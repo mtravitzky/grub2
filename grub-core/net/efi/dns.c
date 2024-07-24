@@ -41,6 +41,8 @@ grub_cmd_efi_list_dns (
       return GRUB_ERR_UNKNOWN_DEVICE;
   }
 
+  dp = grub_efi_find_last_device_path (dp);
+
   grub_printf ("\nDevice type: %d \n"
                "Device sub-type: %d\n"
                "Device path length: %d", dp->type, dp->subtype, dp->length);
@@ -51,7 +53,7 @@ grub_cmd_efi_list_dns (
       return GRUB_ERR_UNKNOWN_DEVICE;
   }
 
-  acpi = (grub_efi_acpi_device_path_t *) grub_efi_find_last_device_path (dp);
+  acpi = (grub_efi_acpi_device_path_t *) dp;
 
   grub_printf ("\nDevice HID: %8x\n"
                "Device UID: %8x\n", acpi->hid, acpi->uid);
