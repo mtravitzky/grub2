@@ -53,8 +53,8 @@ grub_cmd_efi_list_dns (
 
   acpi = (grub_efi_acpi_device_path_t *) dp;
 
-  grub_printf ("\nDevice HID: %#010x\n"
-               "Device UID: %#010x\n", acpi->hid, acpi->uid);
+  grub_printf ("\nDevice HID: %#08x\n"
+               "Device UID: %#08x\n", acpi->hid, acpi->uid);
 
   return GRUB_ERR_NONE;
 }
