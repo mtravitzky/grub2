@@ -18,6 +18,7 @@ grub_cmd_efi_list_dns (
   grub_efi_handle_t *handles;
   grub_efi_uintn_t num_handles;
   grub_efi_device_path_t *dp;
+  grub_efi_acpi_device_path_t *acpi = (grub_efi_acpi_device_path_t *) dp;
   num_handles = 0;
 
   handles = grub_efi_locate_handle (GRUB_EFI_BY_PROTOCOL, &dns4sb_protocol_guid,
@@ -25,24 +26,33 @@ grub_cmd_efi_list_dns (
 
   if(! handles)
   {
-      grub_printf ("Handles pointer NULL!\n");
+      grub_printf ("Handles pointer NULL\n");
       return GRUB_ERR_UNKNOWN_DEVICE;
   }
-  grub_printf ("Handles found: %lu \n"
-                "First handle address: %p\n", num_handles, handles[0]);
+  grub_printf ("\nHandles found: %lu \n"
+               "First handle address: %p\n", num_handles, handles[0]);
 
   dp = grub_efi_get_device_path(handles[0]);
   grub_free(handles);
 
   if(! dp)
   {
-      grub_printf ("Device Path pointer NULL!\n");
+      grub_printf ("Device Path pointer NULL\n");
       return GRUB_ERR_UNKNOWN_DEVICE;
   }
 
-  grub_printf ("Device type: %d \n"
-                "Device sub-type: %d\n"
-                "Device path length: %d", dp->type, dp->subtype, dp->length);
+  grub_printf ("\nDevice type: %d \n"
+               "Device sub-type: %d\n"
+               "Device path length: %d", dp->type, dp->subtype, dp->length);
+
+  if (dp->type != GRUB_EFI_ACPI_DEVICE_PATH_TYPE || dp->subtype != GRUB_EFI_ACPI_DEVICE_PATH_SUBTYPE)
+  {
+      grub_printf ("Wrong device type\n");
+      return GRUB_ERR_UNKNOWN_DEVICE;
+  }
+
+  grub_printf ("\nDevice HID: %d \n"
+               "Device UID: %d", acpi->hid, acpi->uid);
 
   return GRUB_ERR_NONE;
 }
