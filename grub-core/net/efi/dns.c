@@ -18,7 +18,7 @@ grub_cmd_efi_list_dns (
   grub_efi_handle_t *handles;
   grub_efi_uintn_t num_handles;
   grub_efi_device_path_t *dp;
-  grub_efi_acpi_device_path_t *acpi = (grub_efi_acpi_device_path_t *) dp;
+  grub_efi_acpi_device_path_t *acpi;
   num_handles = 0;
 
   handles = grub_efi_locate_handle (GRUB_EFI_BY_PROTOCOL, &dns4sb_protocol_guid,
@@ -50,6 +50,8 @@ grub_cmd_efi_list_dns (
       grub_printf ("Wrong device type\n");
       return GRUB_ERR_UNKNOWN_DEVICE;
   }
+
+  acpi = (grub_efi_acpi_device_path_t *) dp;
 
   grub_printf ("\nDevice HID: %d \n"
                "Device UID: %d", acpi->hid, acpi->uid);
