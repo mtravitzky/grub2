@@ -51,7 +51,7 @@ grub_cmd_efi_list_dns (
       return GRUB_ERR_UNKNOWN_DEVICE;
   }
 
-  acpi = (grub_efi_acpi_device_path_t *) dp;
+  acpi = (grub_efi_acpi_device_path_t *) grub_efi_find_last_device_path (dp);
 
   grub_printf ("\nDevice HID: %8x\n"
                "Device UID: %8x\n", acpi->hid, acpi->uid);
