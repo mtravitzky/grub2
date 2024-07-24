@@ -17,21 +17,32 @@ grub_cmd_efi_list_dns (
   grub_printf ("Experimental\n");
   grub_efi_handle_t *handles;
   grub_efi_uintn_t num_handles;
+  grub_efi_device_path_t *dp;
   num_handles = 0;
 
   handles = grub_efi_locate_handle (GRUB_EFI_BY_PROTOCOL, &dns4sb_protocol_guid,
 				    0, &num_handles);
 
-  grub_printf ("Handles found: %lu \n", num_handles);
-
   if(! handles)
   {
-      grub_printf ("Handles pointer NULL!");
-  } else 
-  {
-      grub_printf("First handle address: %p\n", handles[0]);
-      grub_free(handles);
+      grub_printf ("Handles pointer NULL!\n");
+      return GRUB_ERR_UNKNOWN_DEVICE;
   }
+  grub_printf ("Handles found: %lu \n
+                First handle address: %p\n", num_handles, handles[0]);
+
+  dp = grub_efi_get_device_path(handles[0]);
+  grub_free(handles);
+
+  if(! dp)
+  {
+      grub_printf ("Device Path pointer NULL!\n");
+      return GRUB_ERR_UNKNOWN_DEVICE;
+  }
+
+  grub_printf ("Device type: %d \n
+                Device sub-type: %d\n
+                Device path length: %d", dp->type, dp->subtype, dp->length);
 
   return GRUB_ERR_NONE;
 }
